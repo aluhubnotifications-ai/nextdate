@@ -11,7 +11,9 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
-      - key: SUPABASE_ANON_KEY
+      - key: SUPABASE_JWT_SECRET
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
+      - key: ALLOWED_EMAIL_DOMAINS
+        value: alustudent.com,aluedu.org

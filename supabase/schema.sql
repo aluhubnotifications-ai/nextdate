@@ -1,6 +1,8 @@
 -- ============================================================
--- ALU Matchmaking — Supabase Schema
--- Run this in the Supabase SQL editor in order.
+-- ALU Matchmaking — Supabase Schema (custom auth variant)
+-- Users live in public.users; JWTs are minted by the FastAPI
+-- backend and signed with the Supabase JWT secret so that
+-- Supabase Realtime + RLS (auth.uid()) keep working.
 -- ============================================================
 
 -- ---------- ENUMS ----------
@@ -14,10 +16,28 @@ begin
   end if;
 end$$;
 
+-- ---------- OUR OWN AUTH TABLE ----------
+create table if not exists public.users (
+  id            uuid primary key default gen_random_uuid(),
+  email         varchar not null unique check (email ilike '%@alustudent.com' or email ilike '%@aluedu.org'),
+  password_hash text not null,
+  created_at    timestamptz not null default now()
+);
+
+alter table public.users enable row level security;
+
+-- Owner-only read; never expose other users' password_hash to the client.
+drop policy if exists "users_self_select" on public.users;
+create policy "users_self_select"
+  on public.users for select
+  to authenticated using (auth.uid() = id);
+
+-- No client inserts/updates — the backend (service key) owns this table.
+
 -- ---------- TABLE A: profiles (public) ----------
 create table if not exists public.profiles (
-  id            uuid primary key references auth.users(id) on delete cascade,
-  email         varchar not null check (email ilike '%@alustudent.com' or email ilike '%@aluedu.org'),
+  id            uuid primary key references public.users(id) on delete cascade,
+  email         varchar not null,
   nickname      varchar not null,
   avatar_url    varchar,
   gender        varchar,
@@ -56,7 +76,6 @@ create table if not exists public.match_preferences (
 
 alter table public.match_preferences enable row level security;
 
--- Owner can read/write own preferences ONLY (service role on backend bypasses RLS).
 drop policy if exists "prefs_self_select" on public.match_preferences;
 create policy "prefs_self_select"
   on public.match_preferences for select
@@ -85,7 +104,6 @@ create table if not exists public.private_identities (
 
 alter table public.private_identities enable row level security;
 
--- The owner may always manage their OWN private record.
 drop policy if exists "priv_self_select" on public.private_identities;
 create policy "priv_self_select"
   on public.private_identities for select
@@ -110,7 +128,7 @@ create table if not exists public.chat_sessions (
   user_b_approved_reveal   boolean not null default false,
   created_at               timestamptz not null default now(),
   unique (user_a, user_b),
-  check (user_a < user_b)        -- canonical ordering -> a single row per pair
+  check (user_a < user_b)
 );
 
 alter table public.chat_sessions enable row level security;
@@ -125,7 +143,6 @@ create policy "sessions_participants_insert"
   on public.chat_sessions for insert
   to authenticated with check (auth.uid() = user_a or auth.uid() = user_b);
 
--- A participant may only flip THEIR OWN reveal flag.
 drop policy if exists "sessions_participants_update" on public.chat_sessions;
 create policy "sessions_participants_update"
   on public.chat_sessions for update
@@ -221,7 +238,6 @@ end$$;
 grant execute on function public.open_chat_session(uuid) to authenticated;
 
 -- ---------- helper RPC: reveal-state (mutual hydration) ----------
--- Returns the OTHER participant's private identity ONLY when both flags are true.
 create or replace function public.get_revealed_identity(session uuid)
 returns table (
   user_id         uuid,
@@ -248,7 +264,7 @@ begin
     raise exception 'forbidden';
   end if;
   if not (s.user_a_approved_reveal and s.user_b_approved_reveal) then
-    return;  -- empty set: still locked
+    return;
   end if;
 
   other := case when me = s.user_a then s.user_b else s.user_a end;

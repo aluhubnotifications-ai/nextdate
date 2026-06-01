@@ -1,26 +1,35 @@
 """
-ALU Matchmaking — FastAPI matching engine (Render deployment target).
+ALU Matchmaking — FastAPI backend.
 
-Reads hidden match_preferences with the Supabase service role key, scores
-candidates, and returns ONLY the public profile fields permitted by the
-brief (Section 3). Verifies the caller's JWT and refuses to compute
-suggestions for any user other than the token holder.
+- Owns authentication (email/password, bcrypt, JWT).
+- JWTs are HS256-signed with the Supabase JWT secret so that
+  Supabase Realtime + RLS (auth.uid()) accept them transparently.
+- Matching engine reads hidden match_preferences with the service key.
 """
 import os
+import time
+import uuid
 from typing import List, Optional
 
+import bcrypt
+import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from supabase import Client, create_client
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+JWT_TTL_SECONDS = int(os.environ.get("JWT_TTL_SECONDS", "604800"))  # 7 days
+ALLOWED_EMAIL_DOMAINS = [
+    d.strip().lower()
+    for d in os.environ.get("ALLOWED_EMAIL_DOMAINS", "alustudent.com,aluedu.org").split(",")
+    if d.strip()
+]
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    # Allow boot in dev without env so /healthz still works.
-    print("[warn] SUPABASE_URL / SUPABASE_SERVICE_KEY not set — matching endpoints will 500.")
+if not (SUPABASE_URL and SUPABASE_SERVICE_KEY and SUPABASE_JWT_SECRET):
+    print("[warn] SUPABASE_URL / SUPABASE_SERVICE_KEY / SUPABASE_JWT_SECRET not all set — auth + matching will 500.")
 
 admin: Optional[Client] = (
     create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -28,14 +37,9 @@ admin: Optional[Client] = (
     else None
 )
 
-app = FastAPI(title="ALU Matchmaking — Matching Engine")
+app = FastAPI(title="ALU Matchmaking — Backend")
 
-# Cloudflare Pages frontend lives on a different origin.
-ALLOWED_ORIGINS = os.environ.get(
-    "ALLOWED_ORIGINS",
-    "*",
-).split(",")
-
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
@@ -43,6 +47,85 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------- helpers ----------
+def require_admin() -> Client:
+    if admin is None:
+        raise HTTPException(status_code=500, detail="Backend not configured.")
+    return admin
+
+
+def mint_jwt(user_id: str, email: str) -> str:
+    """Issue a Supabase-compatible JWT so RLS sees `auth.uid() = user_id`."""
+    if not SUPABASE_JWT_SECRET:
+        raise HTTPException(status_code=500, detail="JWT secret not configured.")
+    now = int(time.time())
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "role": "authenticated",
+        "aud": "authenticated",
+        "iss": "alu-match-backend",
+        "iat": now,
+        "exp": now + JWT_TTL_SECONDS,
+    }
+    return jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm="HS256")
+
+
+def caller_id(authorization: Optional[str] = Header(default=None)) -> str:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token.")
+    token = authorization.split(" ", 1)[1].strip()
+    if not SUPABASE_JWT_SECRET:
+        raise HTTPException(status_code=500, detail="JWT secret not configured.")
+    try:
+        claims = jwt.decode(
+            token,
+            SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+    except jwt.PyJWTError as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
+    sub = claims.get("sub")
+    if not sub:
+        raise HTTPException(status_code=401, detail="Invalid token (no sub).")
+    return sub
+
+
+def hash_password(plain: str) -> str:
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def email_domain_ok(email: str) -> bool:
+    e = email.strip().lower()
+    return any(e.endswith("@" + d) for d in ALLOWED_EMAIL_DOMAINS)
+
+
+# ---------- schemas ----------
+class SignupBody(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6, max_length=128)
+
+
+class LoginBody(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class AuthResponse(BaseModel):
+    user_id: str
+    email: str
+    token: str
+    expires_in: int
 
 
 class SuggestionResponse(BaseModel):
@@ -54,36 +137,50 @@ class SuggestionResponse(BaseModel):
     score: int = 0
 
 
-def require_admin() -> Client:
-    if admin is None:
-        raise HTTPException(status_code=500, detail="Backend not configured.")
-    return admin
-
-
-def caller_id(authorization: Optional[str] = Header(default=None)) -> str:
-    """Resolve the caller's auth.users.id from the bearer JWT."""
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token.")
-    token = authorization.split(" ", 1)[1].strip()
-
-    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-        raise HTTPException(status_code=500, detail="Auth verifier not configured.")
-
-    verifier: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-    try:
-        user_resp = verifier.auth.get_user(token)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
-
-    user = getattr(user_resp, "user", None)
-    if not user or not user.id:
-        raise HTTPException(status_code=401, detail="Invalid token.")
-    return user.id
-
-
+# ---------- routes ----------
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+@app.post("/auth/signup", response_model=AuthResponse)
+def signup(body: SignupBody, db: Client = Depends(require_admin)):
+    email = body.email.lower()
+    if not email_domain_ok(email):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Email must end in {' or '.join('@' + d for d in ALLOWED_EMAIL_DOMAINS)}.",
+        )
+
+    existing = db.table("users").select("id").eq("email", email).maybe_single().execute()
+    if existing.data:
+        raise HTTPException(status_code=409, detail="Email already registered.")
+
+    new_id = str(uuid.uuid4())
+    db.table("users").insert(
+        {"id": new_id, "email": email, "password_hash": hash_password(body.password)}
+    ).execute()
+
+    token = mint_jwt(new_id, email)
+    return AuthResponse(user_id=new_id, email=email, token=token, expires_in=JWT_TTL_SECONDS)
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login(body: LoginBody, db: Client = Depends(require_admin)):
+    email = body.email.lower()
+    row = db.table("users").select("*").eq("email", email).maybe_single().execute()
+    if not row.data or not verify_password(body.password, row.data["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    token = mint_jwt(row.data["id"], email)
+    return AuthResponse(user_id=row.data["id"], email=email, token=token, expires_in=JWT_TTL_SECONDS)
+
+
+@app.get("/auth/me")
+def me(uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
+    row = db.table("users").select("id, email, created_at").eq("id", uid).maybe_single().execute()
+    if not row.data:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return row.data
 
 
 @app.get("/suggestions/{user_id}", response_model=List[SuggestionResponse])
@@ -92,7 +189,6 @@ def get_curated_suggestions(
     me: str = Depends(caller_id),
     db: Client = Depends(require_admin),
 ):
-    # A user may only compute suggestions for themselves.
     if user_id != me:
         raise HTTPException(status_code=403, detail="Forbidden.")
 

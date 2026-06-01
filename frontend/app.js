@@ -1,13 +1,70 @@
 // ALU Match — Cloudflare Pages frontend
-// Plain ES module. No build step.
+// Custom auth (FastAPI backend) + Supabase Realtime/Postgres for data.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const { SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL, EMAIL_DOMAINS } = window.APP_CONFIG;
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true },
-});
+// ---------- token storage ----------
+const TOKEN_KEY = "alu_match_token";
+const USER_KEY  = "alu_match_user";   // {id, email}
 
+const tokens = {
+  get: () => localStorage.getItem(TOKEN_KEY),
+  set: (t) => localStorage.setItem(TOKEN_KEY, t),
+  clear: () => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); },
+};
+const cachedUser = {
+  get: () => { try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); } catch { return null; } },
+  set: (u) => localStorage.setItem(USER_KEY, JSON.stringify(u)),
+};
+
+// ---------- Supabase client (rebuilt whenever the token changes) ----------
+let supabase = buildSupabase(tokens.get());
+
+function buildSupabase(token) {
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers },
+  });
+  if (token) client.realtime.setAuth(token);
+  return client;
+}
+
+function setSession(token, user) {
+  tokens.set(token);
+  if (user) cachedUser.set(user);
+  cleanupRealtime();
+  supabase = buildSupabase(token);
+}
+function clearSession() {
+  tokens.clear();
+  cleanupRealtime();
+  supabase = buildSupabase(null);
+}
+
+// ---------- backend API ----------
+async function api(path, { method = "GET", body, auth = true } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (auth) {
+    const t = tokens.get();
+    if (t) headers.Authorization = `Bearer ${t}`;
+  }
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    const detail = data?.detail || res.statusText;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return data;
+}
+
+// ---------- DOM helpers ----------
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
@@ -21,10 +78,10 @@ const toast = (msg, ms = 2400) => {
 
 const state = {
   user: null,
-  profile: null,        // public profiles row
-  prefs: null,          // match_preferences row
+  profile: null,
+  prefs: null,
   privateIdentity: null,
-  activeSession: null,  // { id, peer_id, peer_profile, user_a_approved_reveal, user_b_approved_reveal }
+  activeSession: null,
   messagesChannel: null,
   sessionChannel: null,
 };
@@ -57,27 +114,26 @@ function setNavVisible(visible) {
 
 // ---------- init ----------
 (async function init() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
+  if (!tokens.get()) {
     setNavVisible(false);
     return navigate("auth");
   }
-  await onSignedIn(session.user);
-})();
-
-supabase.auth.onAuthStateChange((_evt, session) => {
-  if (!session) {
-    state.user = null;
+  try {
+    const me = await api("/auth/me");
+    await onSignedIn({ id: me.id, email: me.email });
+  } catch (err) {
+    console.warn("Session invalid:", err.message);
+    clearSession();
     setNavVisible(false);
     navigate("auth");
   }
-});
+})();
 
 async function onSignedIn(user) {
   state.user = user;
+  cachedUser.set(user);
   setNavVisible(true);
 
-  // Try to load profile + prefs + private
   const [profileRes, prefsRes, privRes] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
     supabase.from("match_preferences").select("*").eq("user_id", user.id).maybeSingle(),
@@ -104,9 +160,11 @@ function renderAuth(root) {
     const email = $("#email").value.trim();
     const password = $("#password").value;
     if (!email || !password) return toast("Enter email and password.");
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return toast(error.message);
-    onSignedIn(data.user);
+    try {
+      const res = await api("/auth/login", { method: "POST", body: { email, password }, auth: false });
+      setSession(res.token, { id: res.user_id, email: res.email });
+      onSignedIn({ id: res.user_id, email: res.email });
+    } catch (err) { toast(err.message); }
   };
 
   $("#btn-signup").onclick = async () => {
@@ -115,24 +173,25 @@ function renderAuth(root) {
     if (!email || !password) return toast("Enter email and password.");
     if (!isAluEmail(email)) return toast(`Email must end in ${EMAIL_DOMAINS.map((d) => "@" + d).join(" or ")}.`);
     if (password.length < 6) return toast("Password must be at least 6 characters.");
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return toast(error.message);
-    if (!data.session) {
-      return toast("Check your email to confirm, then sign in.", 4000);
-    }
-    onSignedIn(data.user);
+    try {
+      const res = await api("/auth/signup", { method: "POST", body: { email, password }, auth: false });
+      setSession(res.token, { id: res.user_id, email: res.email });
+      onSignedIn({ id: res.user_id, email: res.email });
+    } catch (err) { toast(err.message); }
   };
 }
 
 async function doLogout() {
-  await supabase.auth.signOut();
+  clearSession();
+  state.user = null;
+  setNavVisible(false);
+  navigate("auth");
 }
 
 // ---------- ONBOARDING ----------
 function renderOnboarding(root) {
   root.append($("#tpl-onboarding").content.cloneNode(true));
 
-  // Pre-fill if user is editing
   if (state.profile) {
     $("#nickname").value     = state.profile.nickname || "";
     $("#avatar_url").value   = state.profile.avatar_url || "🦊";
@@ -244,19 +303,9 @@ async function loadDiscover() {
   const grid = $("#discover-grid");
   grid.innerHTML = `<div class="empty">Finding compatible people…</div>`;
 
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return navigate("auth");
-
   let suggestions = [];
   try {
-    const res = await fetch(`${BACKEND_URL}/suggestions/${state.user.id}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(`Backend ${res.status}: ${msg}`);
-    }
-    suggestions = await res.json();
+    suggestions = await api(`/suggestions/${state.user.id}`);
   } catch (err) {
     grid.innerHTML = `<div class="empty">Couldn't reach the matching engine.<br/><span class="muted">${err.message}</span></div>`;
     return;
@@ -403,7 +452,6 @@ async function sendMessage() {
     body,
   });
   if (error) toast(error.message);
-  // The realtime subscription appends the message on echo.
 }
 
 function subscribeRealtime(sessionId) {
