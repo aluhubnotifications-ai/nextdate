@@ -5,6 +5,8 @@ ALU Matchmaking — FastAPI backend.
 - JWTs are HS256-signed with the Supabase JWT secret so that
   Supabase Realtime + RLS (auth.uid()) accept them transparently.
 - Matching engine reads hidden match_preferences with the service key.
+
+All row shapes live in models.py — this file only wires routes.
 """
 import os
 import time
@@ -15,8 +17,16 @@ import bcrypt
 import jwt
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
 from supabase import Client, create_client
+
+from models import (
+    AuthResponse,
+    LoginBody,
+    MatchPreferences,
+    Profile,
+    SignupBody,
+    SuggestionResponse,
+)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
@@ -110,33 +120,6 @@ def email_domain_ok(email: str) -> bool:
     return any(e.endswith("@" + d) for d in ALLOWED_EMAIL_DOMAINS)
 
 
-# ---------- schemas ----------
-class SignupBody(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=6, max_length=128)
-
-
-class LoginBody(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class AuthResponse(BaseModel):
-    user_id: str
-    email: str
-    token: str
-    expires_in: int
-
-
-class SuggestionResponse(BaseModel):
-    user_id: str
-    nickname: str
-    avatar_url: Optional[str] = None
-    gender: Optional[str] = None
-    zodiac_sign: Optional[str] = None
-    score: int = 0
-
-
 # ---------- routes ----------
 @app.get("/healthz")
 def healthz():
@@ -192,23 +175,23 @@ def get_curated_suggestions(
     if user_id != me:
         raise HTTPException(status_code=403, detail="Forbidden.")
 
-    pref = (
+    pref_row = (
         db.table("match_preferences")
         .select("*")
         .eq("user_id", user_id)
         .maybe_single()
         .execute()
     )
-    if not pref.data:
+    if not pref_row.data:
         raise HTTPException(status_code=404, detail="Preferences unconfigured.")
 
-    prefs = pref.data
+    prefs = MatchPreferences(**pref_row.data)
 
     candidates_q = (
         db.table("match_preferences")
         .select("user_id, interests, hobbies, leisure_time, wants_in_relationship")
-        .eq("target_intent", prefs["target_intent"])
-        .eq("term_length", prefs["term_length"])
+        .eq("target_intent", prefs.target_intent)
+        .eq("term_length", prefs.term_length)
         .execute()
     )
 
@@ -216,8 +199,8 @@ def get_curated_suggestions(
     if not rows:
         return []
 
-    my_interests = set(prefs.get("interests") or [])
-    my_hobbies = set(prefs.get("hobbies") or [])
+    my_interests = set(prefs.interests)
+    my_hobbies = set(prefs.hobbies)
 
     scored = []
     for r in rows:
@@ -231,21 +214,21 @@ def get_curated_suggestions(
 
     profiles_q = (
         db.table("profiles")
-        .select("id, nickname, avatar_url, gender, zodiac_sign")
+        .select("id, email, nickname, avatar_url, gender, zodiac_sign")
         .in_("id", ordered_ids)
         .execute()
     )
 
-    by_id = {p["id"]: p for p in (profiles_q.data or [])}
+    by_id: dict[str, Profile] = {p["id"]: Profile(**p) for p in (profiles_q.data or [])}
     score_by_id = {uid: s for s, uid in scored}
 
     return [
         SuggestionResponse(
             user_id=uid,
-            nickname=by_id[uid].get("nickname") or "Anonymous",
-            avatar_url=by_id[uid].get("avatar_url"),
-            gender=by_id[uid].get("gender"),
-            zodiac_sign=by_id[uid].get("zodiac_sign"),
+            nickname=by_id[uid].nickname,
+            avatar_url=by_id[uid].avatar_url,
+            gender=by_id[uid].gender,
+            zodiac_sign=by_id[uid].zodiac_sign,
             score=score_by_id.get(uid, 0),
         )
         for uid in ordered_ids

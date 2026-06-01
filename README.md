@@ -13,14 +13,23 @@ Cloudflare Pages (frontend)
 
 ## Layout
 ```
-frontend/     Static Cloudflare Pages bundle (no build step)
-backend/      FastAPI matching engine for Render
-supabase/     SQL schema + RLS policies + helper RPCs
+frontend/                       Static Cloudflare Pages bundle (no build step)
+backend/
+├── main.py                     FastAPI app (routes only)
+├── models.py                   Pydantic models — one source of truth per table
+└── requirements.txt
+supabase/
+├── README.md                   How migrations work
+└── migrations/                 Timestamped, append-only SQL
+    └── 20260601000001_initial.sql
 ```
 
 ## 1 · Supabase setup
 1. Create a new Supabase project.
-2. Open **SQL editor → New query**, paste `supabase/schema.sql`, run it.
+2. Apply migrations — either:
+   - **CLI** (`supabase link` then `supabase db push`), or
+   - paste `supabase/migrations/*.sql` files in filename order into the SQL editor.
+   See [`supabase/README.md`](./supabase/README.md).
 3. (You can leave Supabase Auth providers off — we use our own auth.)
 4. Copy these values from **Project Settings → API**:
    - `Project URL`
