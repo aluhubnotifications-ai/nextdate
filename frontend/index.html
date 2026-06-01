@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ALU Match — Find Your People</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%9C%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <div class="brand-title">ALU Match<span class="brand-sub">campus only</span></div>
+        </div>
+      </div>
+      <nav class="nav" id="nav">
+        <button data-view="discover" class="hidden">Discover</button>
+        <button data-view="chats"    class="hidden">Chats</button>
+        <button data-view="profile"  class="hidden">Profile</button>
+        <button data-view="logout"   class="hidden">Log out</button>
+      </nav>
+    </header>
+
+    <main id="view-root"></main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- Templates -->
+  <template id="tpl-auth">
+    <section class="center-wrap">
+      <div class="card auth-card">
+        <h1>Welcome 💜</h1>
+        <p class="muted">Sign in with your <b>@alustudent.com</b> email. Your real name and contact stay hidden until both of you choose to reveal them.</p>
+        <div class="hr"></div>
+
+        <div class="field">
+          <label>School email</label>
+          <input id="email" type="email" placeholder="you@alustudent.com" />
+        </div>
+        <div class="field">
+          <label>Password (min 6 chars)</label>
+          <input id="password" type="password" placeholder="••••••••" />
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <button id="btn-login"  class="btn full">Sign in</button>
+          <button id="btn-signup" class="btn ghost full">Create account</button>
+        </div>
+        <p class="muted" style="margin-top:14px; font-size:12px;">By signing up you accept the campus community guidelines. Don't be a creep. 🙏</p>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-onboarding">
+    <section>
+      <div class="card">
+        <h1>Set up your profile</h1>
+        <p class="muted">Pick a public nickname. Everything below in <b>Private</b> stays hidden until a mutual reveal.</p>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2>Public card</h2>
+        <div class="row">
+          <div class="field"><label>Nickname</label><input id="nickname" placeholder="e.g. NightOwl" /></div>
+          <div class="field"><label>Avatar</label>
+            <select id="avatar_url">
+              <option value="🦊">🦊 Fox</option>
+              <option value="🐼">🐼 Panda</option>
+              <option value="🦄">🦄 Unicorn</option>
+              <option value="🐙">🐙 Octopus</option>
+              <option value="🌸">🌸 Bloom</option>
+              <option value="🦁">🦁 Lion</option>
+              <option value="🐝">🐝 Bee</option>
+              <option value="🐢">🐢 Turtle</option>
+            </select>
+          </div>
+          <div class="field"><label>Gender</label>
+            <select id="gender">
+              <option value="">Prefer not to say</option>
+              <option>Woman</option><option>Man</option><option>Non-binary</option><option>Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Zodiac sign</label>
+            <select id="zodiac_sign">
+              <option value="">—</option>
+              <option>Aries</option><option>Taurus</option><option>Gemini</option><option>Cancer</option>
+              <option>Leo</option><option>Virgo</option><option>Libra</option><option>Scorpio</option>
+              <option>Sagittarius</option><option>Capricorn</option><option>Aquarius</option><option>Pisces</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2>Matching preferences <span class="badge">used by algorithm</span></h2>
+        <div class="row">
+          <div class="field"><label>I'm looking for</label>
+            <select id="target_intent">
+              <option>Friendships</option><option>Dates</option><option>Relationship</option>
+            </select>
+          </div>
+          <div class="field"><label>Term</label>
+            <select id="term_length">
+              <option>Short-term</option><option>Long-term</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Interests (press Enter to add)</label>
+          <div class="tag-input" id="interests-input"><input placeholder="e.g. afrobeats, climate-tech" /></div>
+        </div>
+        <div class="field"><label>Hobbies (press Enter to add)</label>
+          <div class="tag-input" id="hobbies-input"><input placeholder="e.g. salsa, chess" /></div>
+        </div>
+        <div class="field"><label>How I spend leisure time</label>
+          <textarea id="leisure_time" placeholder="A sentence or two..."></textarea>
+        </div>
+        <div class="field"><label>What I want in a connection</label>
+          <textarea id="wants_in_relationship" placeholder="A sentence or two..."></textarea>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2>Private identity <span class="badge">locked until mutual reveal</span></h2>
+        <div class="row">
+          <div class="field"><label>Real name</label><input id="real_name" /></div>
+          <div class="field"><label>Age</label><input id="age" type="number" min="16" max="99" /></div>
+          <div class="field"><label>Cohort</label><input id="cohort" placeholder="e.g. BSc CS 2026" /></div>
+          <div class="field"><label>WhatsApp number</label><input id="whatsapp_number" placeholder="+250…" /></div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px; display:flex; gap:10px; justify-content:flex-end;">
+        <button class="btn" id="save-profile">Save & continue</button>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-discover">
+    <section>
+      <div class="card" style="margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h2 style="margin:0">Discover</h2>
+          <div class="muted" style="font-size:13px; margin-top:4px;">Curated by your intent &amp; term length. Identity stays private until a mutual reveal.</div>
+        </div>
+        <button class="btn ghost" id="refresh-discover">Refresh</button>
+      </div>
+      <div id="discover-grid" class="grid"></div>
+    </section>
+  </template>
+
+  <template id="tpl-chats">
+    <section class="chat-shell">
+      <aside class="card sidebar">
+        <h2 style="margin:0 0 10px">Chats</h2>
+        <div id="session-list"></div>
+      </aside>
+      <section class="card chat-main">
+        <div id="chat-empty" class="empty">Pick a chat on the left, or start one from <b>Discover</b>.</div>
+        <div id="chat-active" class="hidden" style="display:flex; flex-direction:column; flex:1;">
+          <div class="chat-header">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="avatar" id="peer-avatar"></div>
+              <div>
+                <div id="peer-name" style="font-weight:600"></div>
+                <div class="muted" style="font-size:12px;" id="peer-meta"></div>
+              </div>
+            </div>
+            <div class="muted" style="font-size:12px;" id="peer-session-id"></div>
+          </div>
+          <div id="reveal-banner" class="reveal-banner locked">
+            <div id="reveal-text">Identities are hidden. Tap reveal when you both feel ready.</div>
+            <button id="reveal-btn" class="btn warn">Reveal my identity</button>
+          </div>
+          <div id="identity-panel" class="identity-panel hidden"></div>
+          <div id="chat-body" class="chat-body"></div>
+          <div class="chat-input">
+            <input id="msg-input" placeholder="Say hi…" />
+            <button class="btn" id="send-btn">Send</button>
+          </div>
+        </div>
+      </section>
+    </section>
+  </template>
+
+  <template id="tpl-profile">
+    <section>
+      <div class="card">
+        <h2 style="margin-top:0">Your profile</h2>
+        <div id="profile-summary"></div>
+        <div style="margin-top:14px; display:flex; gap:10px;">
+          <button class="btn" id="edit-profile">Edit</button>
+        </div>
+      </div>
+    </section>
+  </template>
+
+  <!-- App -->
+  <script src="./config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
