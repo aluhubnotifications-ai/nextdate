@@ -1,0 +1,8 @@
+{
+  "name": "alu-match-frontend",
+  "private": true,
+  "description": "Static Cloudflare Pages bundle — no build step.",
+  "scripts": {
+    "build": "echo 'Static site — nothing to build.'"
+  }
+}
