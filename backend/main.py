@@ -15,8 +15,9 @@ from typing import List, Optional
 
 import bcrypt
 import jwt
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from supabase import Client, create_client
 
 from models import (
@@ -57,6 +58,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(_: Request, exc: Exception):
+    # Catch-all so unexpected errors still pass through CORSMiddleware
+    # (Starlette's default 500 path bypasses it, which surfaces in the
+    # browser as a misleading "No Access-Control-Allow-Origin" error).
+    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
 
 
 # ---------- helpers ----------
@@ -135,7 +144,7 @@ def signup(body: SignupBody, db: Client = Depends(require_admin)):
             detail=f"Email must end in {' or '.join('@' + d for d in ALLOWED_EMAIL_DOMAINS)}.",
         )
 
-    existing = db.table("users").select("id").eq("email", email).maybe_single().execute()
+    existing = db.table("users").select("id").eq("email", email).limit(1).execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="Email already registered.")
 
@@ -151,19 +160,20 @@ def signup(body: SignupBody, db: Client = Depends(require_admin)):
 @app.post("/auth/login", response_model=AuthResponse)
 def login(body: LoginBody, db: Client = Depends(require_admin)):
     email = body.email.lower()
-    row = db.table("users").select("*").eq("email", email).maybe_single().execute()
-    if not row.data or not verify_password(body.password, row.data["password_hash"]):
+    rows = db.table("users").select("*").eq("email", email).limit(1).execute()
+    user_row = rows.data[0] if rows.data else None
+    if not user_row or not verify_password(body.password, user_row["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
-    token = mint_jwt(row.data["id"], email)
-    return AuthResponse(user_id=row.data["id"], email=email, token=token, expires_in=JWT_TTL_SECONDS)
+    token = mint_jwt(user_row["id"], email)
+    return AuthResponse(user_id=user_row["id"], email=email, token=token, expires_in=JWT_TTL_SECONDS)
 
 
 @app.get("/auth/me")
 def me(uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
-    row = db.table("users").select("id, email, created_at").eq("id", uid).maybe_single().execute()
-    if not row.data:
+    rows = db.table("users").select("id, email, created_at").eq("id", uid).limit(1).execute()
+    if not rows.data:
         raise HTTPException(status_code=404, detail="User not found.")
-    return row.data
+    return rows.data[0]
 
 
 @app.get("/suggestions/{user_id}", response_model=List[SuggestionResponse])
@@ -175,17 +185,17 @@ def get_curated_suggestions(
     if user_id != me:
         raise HTTPException(status_code=403, detail="Forbidden.")
 
-    pref_row = (
+    pref_rows = (
         db.table("match_preferences")
         .select("*")
         .eq("user_id", user_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
-    if not pref_row.data:
+    if not pref_rows.data:
         raise HTTPException(status_code=404, detail="Preferences unconfigured.")
 
-    prefs = MatchPreferences(**pref_row.data)
+    prefs = MatchPreferences(**pref_rows.data[0])
 
     candidates_q = (
         db.table("match_preferences")
