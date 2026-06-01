@@ -61,15 +61,31 @@ Deploy on Render using `backend/render.yaml`. Set env vars:
 - `GET  /suggestions/{user_id}` → matched cards (caller must equal `user_id`)
 
 ## 3 · Frontend (Cloudflare Pages)
-Edit `frontend/config.js` with your Supabase URL, anon key, and the deployed
-Render backend URL. Then deploy `frontend/` as a static site on Cloudflare
-Pages (no build command, output directory `/`).
+Deploy `frontend/` as a static site. **No values live in the repo** —
+runtime config is served by a Pages Function (`frontend/functions/api/config.js`)
+that reads from Pages environment variables.
 
-For local development:
+In Cloudflare Pages → your project → **Settings → Environment variables**,
+add (Production + Preview):
+
+| Key | Example |
+|---|---|
+| `SUPABASE_URL` | `https://xxxxx.supabase.co` |
+| `SUPABASE_ANON_KEY` | `eyJhbGciOi...` |
+| `BACKEND_URL` | `https://alu-match-engine.onrender.com` |
+| `EMAIL_DOMAINS` *(optional)* | `alustudent.com,aluedu.org` |
+
+Build settings:
+- **Build command**: *(blank)*
+- **Build output directory**: `frontend`
+
+For local development with the same model, use Cloudflare's local dev
+server so the Pages Function works:
 ```
+npm install -g wrangler
 cd frontend
-python -m http.server 5173
-# open http://localhost:5173
+SUPABASE_URL=... SUPABASE_ANON_KEY=... BACKEND_URL=... \
+  wrangler pages dev . --port 5173
 ```
 
 ## Auth model

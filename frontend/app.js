@@ -1,8 +1,27 @@
 // ALU Match — Cloudflare Pages frontend
 // Custom auth (FastAPI backend) + Supabase Realtime/Postgres for data.
+// Runtime config is fetched from /api/config (a Cloudflare Pages Function
+// that reads values from the project's environment variables). No URLs
+// or keys are baked into the bundle.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-const { SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL, EMAIL_DOMAINS } = window.APP_CONFIG;
+let SUPABASE_URL = "";
+let SUPABASE_ANON_KEY = "";
+let BACKEND_URL = "";
+let EMAIL_DOMAINS = [];
+
+async function loadAppConfig() {
+  const res = await fetch("/api/config", { cache: "no-store" });
+  if (!res.ok) throw new Error(`config endpoint ${res.status}`);
+  const cfg = await res.json();
+  SUPABASE_URL      = cfg.SUPABASE_URL;
+  SUPABASE_ANON_KEY = cfg.SUPABASE_ANON_KEY;
+  BACKEND_URL       = cfg.BACKEND_URL;
+  EMAIL_DOMAINS     = cfg.EMAIL_DOMAINS || [];
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !BACKEND_URL) {
+    throw new Error("Pages env vars not set: SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL.");
+  }
+}
 
 // ---------- token storage ----------
 const TOKEN_KEY = "alu_match_token";
@@ -19,7 +38,8 @@ const cachedUser = {
 };
 
 // ---------- Supabase client (rebuilt whenever the token changes) ----------
-let supabase = buildSupabase(tokens.get());
+// Created in init() once we have config.
+let supabase = null;
 
 function buildSupabase(token) {
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -114,6 +134,24 @@ function setNavVisible(visible) {
 
 // ---------- init ----------
 (async function init() {
+  try {
+    await loadAppConfig();
+  } catch (err) {
+    $("#view-root").innerHTML = `
+      <section class="center-wrap"><div class="card auth-card">
+        <h1>Setup needed</h1>
+        <p class="muted">${escapeHtml(err.message)}</p>
+        <p class="muted" style="font-size:12px;">
+          In Cloudflare Pages → your project → Settings → Environment variables,
+          set <b>SUPABASE_URL</b>, <b>SUPABASE_ANON_KEY</b>, <b>BACKEND_URL</b>,
+          and optionally <b>EMAIL_DOMAINS</b>. Then redeploy.
+        </p>
+      </div></section>`;
+    return;
+  }
+
+  supabase = buildSupabase(tokens.get());
+
   if (!tokens.get()) {
     setNavVisible(false);
     return navigate("auth");
