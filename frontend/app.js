@@ -101,6 +101,24 @@ const DEMO_SESSIONS = [
   },
 ];
 
+const DEMO_NOTIFICATIONS = [
+  { id: "n-1", icon: "💬", kind: "message", title: "New message from NightOwl",
+    text: "\"coffee at Java House this weekend?\"",
+    time: "2m ago", unread: true, session_id: "s-aisha" },
+  { id: "n-2", icon: "✨", kind: "match", title: "It's a match — JollofKing",
+    text: "88% compatibility based on your vibe.",
+    time: "1h ago", unread: true, session_id: "s-kofi" },
+  { id: "n-3", icon: "🔓", kind: "reveal", title: "JollofKing revealed their identity",
+    text: "Reveal yours to unlock theirs.",
+    time: "2h ago", unread: true, session_id: "s-kofi" },
+  { id: "n-4", icon: "🌱", kind: "system", title: "Welcome to ALU Match",
+    text: "Be kind, be real — campus community guidelines apply.",
+    time: "yesterday", unread: false },
+  { id: "n-5", icon: "💬", kind: "message", title: "New message from Bloom",
+    text: "\"perfect — see you there 🌱\"",
+    time: "1d ago", unread: false, session_id: "s-thandi" },
+];
+
 const DEMO_MESSAGES = {
   "s-aisha": [
     { id: "m-1", session_id: "s-aisha", sender_id: "u-aisha", body: "hey! saw we matched 👀 how's your week going?", created_at: "2026-05-30T10:01:00Z" },
@@ -205,6 +223,7 @@ const state = {
   activeSession: null,
   messagesChannel: null,
   sessionChannel: null,
+  notifications: DEMO_NOTIFICATIONS.slice(),
 };
 
 // ---------- routing ----------
@@ -213,6 +232,7 @@ const views = {
   onboarding: renderOnboarding,
   discover: renderDiscover,
   chats: renderChats,
+  notifications: renderNotifications,
   profile: renderProfile,
   logout: doLogout,
 };
@@ -221,20 +241,64 @@ async function navigate(name) {
   cleanupRealtime();
   const root = $("#view-root");
   root.innerHTML = "";
-  $$("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
+  document.querySelectorAll(".nav button[data-view]").forEach((b) =>
+    b.classList.toggle("active", b.dataset.view === name),
+  );
   await views[name](root);
 }
 
-$$("#nav button").forEach((b) =>
+document.querySelectorAll(".nav button[data-view]").forEach((b) =>
   b.addEventListener("click", () => navigate(b.dataset.view)),
 );
 
 function setNavVisible(visible) {
-  $$("#nav button").forEach((b) => b.classList.toggle("hidden", !visible));
+  document.querySelectorAll(".nav button[data-view]").forEach((b) =>
+    b.classList.toggle("hidden", !visible),
+  );
+  refreshNotifBadge();
+}
+
+function unreadCount() {
+  return state.notifications.filter((n) => n.unread).length;
+}
+
+function refreshNotifBadge() {
+  const badge = document.getElementById("nav-notif-badge");
+  if (!badge) return;
+  const n = unreadCount();
+  badge.textContent = n > 99 ? "99+" : String(n);
+  badge.classList.toggle("hidden", n === 0);
+}
+
+// ---------- theme ----------
+const THEME_KEY = "alu_match_theme";
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem(THEME_KEY, theme);
+  const isLight = theme === "light";
+  const iconDark  = document.getElementById("theme-icon-dark");
+  const iconLight = document.getElementById("theme-icon-light");
+  const label     = document.getElementById("theme-label");
+  if (iconDark)  iconDark.classList.toggle("hidden", isLight);
+  if (iconLight) iconLight.classList.toggle("hidden", !isLight);
+  if (label)     label.textContent = isLight ? "Dark mode" : "Light mode";
+}
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  applyTheme(saved === "light" ? "light" : "dark");
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    btn.onclick = () => {
+      const current = document.documentElement.dataset.theme || "dark";
+      applyTheme(current === "light" ? "dark" : "light");
+    };
+  }
 }
 
 // ---------- init ----------
 (async function init() {
+  initTheme();
+
   if (DEMO_MODE) {
     state.user            = { id: DEMO_ME.id, email: DEMO_ME.email };
     state.profile         = DEMO_ME.profile;
@@ -485,7 +549,7 @@ async function loadDiscover() {
       <div style="display:flex; align-items:flex-start; gap:14px;">
         <div class="avatar">${escapeHtml(s.avatar_url || "🦊")}</div>
         <div style="flex:1; min-width:0;">
-          <div style="font-weight:800; font-size:17px; color:#FFFFFF; letter-spacing:-0.2px;">${escapeHtml(s.nickname)}</div>
+          <div style="font-weight:800; font-size:17px; color:var(--text); letter-spacing:-0.2px;">${escapeHtml(s.nickname)}</div>
           <div class="muted" style="font-size:12.5px; margin-top:3px; font-weight:500;">${meta || "—"}</div>
         </div>
       </div>
@@ -822,6 +886,50 @@ async function hydrateIdentity() {
     <div class="identity-row"><span>Cohort</span><span>${escapeHtml(id.cohort || "—")}</span></div>
     <div class="identity-row"><span>WhatsApp</span><span>${wa}</span></div>
   `;
+}
+
+// ---------- NOTIFICATIONS ----------
+function renderNotifications(root) {
+  root.append($("#tpl-notifications").content.cloneNode(true));
+  const list = $("#notifications-list");
+  if (!state.notifications.length) {
+    list.innerHTML = `<div class="empty">No notifications yet.</div>`;
+    $("#mark-all-read").classList.add("hidden");
+    return;
+  }
+
+  list.innerHTML = "";
+  for (const n of state.notifications) {
+    const el = document.createElement("div");
+    el.className = "notif-item" + (n.unread ? " unread" : "");
+    el.innerHTML = `
+      <div class="notif-icon ${n.unread ? "" : "muted"}">${escapeHtml(n.icon || "🔔")}</div>
+      <div class="notif-body">
+        <div class="notif-title">${escapeHtml(n.title)}</div>
+        <div class="notif-text">${escapeHtml(n.text || "")}</div>
+        <div class="notif-time">${escapeHtml(n.time || "")}</div>
+      </div>
+    `;
+    el.onclick = async () => {
+      n.unread = false;
+      refreshNotifBadge();
+      if (n.session_id) {
+        await navigate("chats");
+        await openSession(n.session_id);
+      } else {
+        // re-render to clear the unread state visually
+        renderNotifications(root);
+      }
+    };
+    list.appendChild(el);
+  }
+
+  $("#mark-all-read").onclick = () => {
+    state.notifications.forEach((n) => (n.unread = false));
+    refreshNotifBadge();
+    renderNotifications(root);
+    toast("All caught up.");
+  };
 }
 
 // ---------- PROFILE ----------
