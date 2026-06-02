@@ -104,19 +104,22 @@ const DEMO_SESSIONS = [
 const DEMO_NOTIFICATIONS = [
   { id: "n-1", icon: "💬", kind: "message", title: "New message from NightOwl",
     text: "\"coffee at Java House this weekend?\"",
-    time: "2m ago", unread: true, session_id: "s-aisha" },
+    time: "2m ago", group: "today", unread: true, session_id: "s-aisha" },
   { id: "n-2", icon: "✨", kind: "match", title: "It's a match — JollofKing",
     text: "88% compatibility based on your vibe.",
-    time: "1h ago", unread: true, session_id: "s-kofi" },
+    time: "1h ago", group: "today", unread: true, session_id: "s-kofi" },
   { id: "n-3", icon: "🔓", kind: "reveal", title: "JollofKing revealed their identity",
     text: "Reveal yours to unlock theirs.",
-    time: "2h ago", unread: true, session_id: "s-kofi" },
-  { id: "n-4", icon: "🌱", kind: "system", title: "Welcome to ALU Match",
-    text: "Be kind, be real — campus community guidelines apply.",
-    time: "yesterday", unread: false },
+    time: "2h ago", group: "today", unread: true, session_id: "s-kofi" },
+  { id: "n-6", icon: "✨", kind: "match", title: "New match — OctoCoder",
+    text: "79% compatibility — you both like climate-tech.",
+    time: "5h ago", group: "today", unread: true },
   { id: "n-5", icon: "💬", kind: "message", title: "New message from Bloom",
     text: "\"perfect — see you there 🌱\"",
-    time: "1d ago", unread: false, session_id: "s-thandi" },
+    time: "yesterday", group: "earlier", unread: false, session_id: "s-thandi" },
+  { id: "n-4", icon: "🌱", kind: "system", title: "Welcome to ALU Match",
+    text: "Be kind, be real — campus community guidelines apply.",
+    time: "3 days ago", group: "earlier", unread: false },
 ];
 
 const DEMO_MESSAGES = {
@@ -241,9 +244,12 @@ async function navigate(name) {
   cleanupRealtime();
   const root = $("#view-root");
   root.innerHTML = "";
+  // Chat view should fill the entire panel; other views get padded scroll area
+  root.classList.toggle("flush", name === "chats");
   document.querySelectorAll(".nav button[data-view]").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === name),
   );
+  closeDrawer();
   await views[name](root);
 }
 
@@ -255,20 +261,56 @@ function setNavVisible(visible) {
   document.querySelectorAll(".nav button[data-view]").forEach((b) =>
     b.classList.toggle("hidden", !visible),
   );
-  refreshNotifBadge();
+  refreshBadges();
 }
 
 function unreadCount() {
   return state.notifications.filter((n) => n.unread).length;
 }
 
-function refreshNotifBadge() {
-  const badge = document.getElementById("nav-notif-badge");
-  if (!badge) return;
-  const n = unreadCount();
-  badge.textContent = n > 99 ? "99+" : String(n);
-  badge.classList.toggle("hidden", n === 0);
+function unreadChatCount() {
+  // Demo: count distinct sessions referenced by unread message notifications
+  const ids = new Set();
+  for (const n of state.notifications) {
+    if (n.unread && n.kind === "message" && n.session_id) ids.add(n.session_id);
+  }
+  return ids.size;
 }
+
+function refreshBadges() {
+  const notifBadge = document.getElementById("nav-notif-badge");
+  if (notifBadge) {
+    const n = unreadCount();
+    notifBadge.textContent = n > 99 ? "99+" : String(n);
+    notifBadge.classList.toggle("hidden", n === 0);
+  }
+  const chatBadge = document.getElementById("nav-chats-badge");
+  if (chatBadge) {
+    const n = unreadChatCount();
+    chatBadge.textContent = n > 99 ? "99+" : String(n);
+    chatBadge.classList.toggle("hidden", n === 0);
+  }
+  const dot = document.getElementById("mobile-notif-dot");
+  if (dot) {
+    const n = unreadCount();
+    dot.textContent = n > 99 ? "99+" : String(n);
+    dot.classList.toggle("hidden", n === 0);
+  }
+}
+const refreshNotifBadge = refreshBadges;
+
+// ---------- mobile drawer ----------
+function openDrawer() {
+  document.getElementById("app-sidebar")?.classList.add("open");
+  document.getElementById("sidebar-backdrop")?.classList.add("open");
+}
+function closeDrawer() {
+  document.getElementById("app-sidebar")?.classList.remove("open");
+  document.getElementById("sidebar-backdrop")?.classList.remove("open");
+}
+document.getElementById("open-drawer")?.addEventListener("click", openDrawer);
+document.getElementById("sidebar-backdrop")?.addEventListener("click", closeDrawer);
+document.getElementById("mobile-notif-btn")?.addEventListener("click", () => navigate("notifications"));
 
 // ---------- theme ----------
 const THEME_KEY = "alu_match_theme";
@@ -594,6 +636,25 @@ async function renderChats(root) {
   $("#send-btn").onclick = sendMessage;
   $("#msg-input").addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
   $("#reveal-btn").onclick = approveReveal;
+  $("#back-to-list")?.addEventListener("click", closeActiveChat);
+  $("#chat-search-input")?.addEventListener("input", (e) => filterSessions(e.target.value));
+}
+
+function closeActiveChat() {
+  cleanupRealtime();
+  state.activeSession = null;
+  $("#chat-shell")?.classList.remove("has-active");
+  $("#chat-empty")?.classList.remove("hidden");
+  $("#chat-active")?.classList.add("hidden");
+  $$(".session-item").forEach((el) => el.classList.remove("active"));
+}
+
+function filterSessions(query) {
+  const q = (query || "").trim().toLowerCase();
+  $$(".session-item").forEach((el) => {
+    const name = el.dataset.peerName || "";
+    el.style.display = !q || name.toLowerCase().includes(q) ? "" : "none";
+  });
 }
 
 async function loadSessions() {
@@ -634,18 +695,78 @@ async function loadSessions() {
   for (const s of data) {
     const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
     const peer = peerMap[peerId] || { nickname: "Unknown", avatar_url: "🦊" };
+
+    // Last message preview + time (demo-mode only, real mode would query)
+    let preview = "Say hi 👋", lastTime = "";
+    if (DEMO_MODE) {
+      const msgs = DEMO_MESSAGES[s.id] || [];
+      const last = msgs[msgs.length - 1];
+      if (last) {
+        preview = (last.sender_id === state.user.id ? "You: " : "") + last.body;
+        lastTime = formatRelativeTime(last.created_at);
+      }
+    }
+    const unread = state.notifications.filter(
+      (n) => n.unread && n.kind === "message" && n.session_id === s.id,
+    ).length;
+    const revealed = s.user_a_approved_reveal && s.user_b_approved_reveal;
+
     const row = document.createElement("div");
     row.className = "session-item";
     row.dataset.sessionId = s.id;
+    row.dataset.peerName = peer.nickname || "";
     row.innerHTML = `
-      <div class="avatar">${escapeHtml(peer.avatar_url || "🦊")}</div>
-      <div>
-        <div style="font-weight:600">${escapeHtml(peer.nickname)}</div>
-        <div class="muted" style="font-size:11px;">${s.user_a_approved_reveal && s.user_b_approved_reveal ? "Revealed" : "Anonymous"}</div>
+      <div class="avatar">${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span></div>
+      <div class="session-body">
+        <div class="session-top">
+          <div class="session-name">${escapeHtml(peer.nickname)}</div>
+          <div class="session-time">${escapeHtml(lastTime)}</div>
+        </div>
+        <div class="session-preview">${escapeHtml(preview)}</div>
+        <div class="session-meta-row">
+          <div class="session-state">${revealed ? "✓ Revealed" : "🔒 Anonymous"}</div>
+          ${unread ? `<div class="session-unread">${unread}</div>` : ""}
+        </div>
       </div>`;
     row.onclick = () => openSession(s.id);
     list.appendChild(row);
   }
+}
+
+function formatRelativeTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const now = new Date();
+  const diffMs = now - d;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "now";
+  if (mins < 60) return mins + "m";
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return hours + "h";
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days + "d";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatClock(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDayLabel(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today - day) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return d.toLocaleDateString(undefined, { weekday: "long" });
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 async function openSession(sessionId) {
@@ -673,13 +794,24 @@ async function openSession(sessionId) {
   state.activeSession = { ...s, peer_id: peerId, peer_profile: peer };
 
   $$(".session-item").forEach((el) => el.classList.toggle("active", el.dataset.sessionId === sessionId));
+  $("#chat-shell")?.classList.add("has-active");
   $("#chat-empty").classList.add("hidden");
   $("#chat-active").classList.remove("hidden");
 
-  $("#peer-avatar").textContent = peer.avatar_url || "🦊";
+  $("#peer-avatar").innerHTML = `${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span>`;
   $("#peer-name").textContent = peer.nickname;
-  $("#peer-meta").textContent = [peer.gender, peer.zodiac_sign].filter(Boolean).join(" · ");
+  const metaParts = [peer.gender, peer.zodiac_sign].filter(Boolean).map(escapeHtml).join(" · ");
+  $("#peer-meta").innerHTML = `<span class="online"></span> Active now${metaParts ? " · " + metaParts : ""}`;
   $("#peer-session-id").textContent = `#${sessionId.slice(0, 8)}`;
+
+  // Mark associated unread message notifications as read
+  let touched = false;
+  for (const n of state.notifications) {
+    if (n.unread && n.kind === "message" && n.session_id === sessionId) {
+      n.unread = false; touched = true;
+    }
+  }
+  if (touched) refreshBadges();
 
   await loadMessages(sessionId);
   await refreshRevealState();
@@ -689,6 +821,7 @@ async function openSession(sessionId) {
 async function loadMessages(sessionId) {
   const body = $("#chat-body");
   body.innerHTML = "";
+  body.dataset.lastDay = "";
   let data;
   if (DEMO_MODE) {
     data = (DEMO_MESSAGES[sessionId] || []).slice().sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
@@ -707,9 +840,22 @@ async function loadMessages(sessionId) {
 
 function appendMessage(m) {
   const body = $("#chat-body");
+  if (!body) return;
+
+  // Day separator
+  const dayLabel = formatDayLabel(m.created_at);
+  if (dayLabel && body.dataset.lastDay !== dayLabel) {
+    const sep = document.createElement("div");
+    sep.className = "day-sep";
+    sep.textContent = dayLabel;
+    body.appendChild(sep);
+    body.dataset.lastDay = dayLabel;
+  }
+
   const el = document.createElement("div");
   el.className = "bubble " + (m.sender_id === state.user.id ? "mine" : "");
-  el.textContent = m.body;
+  const time = formatClock(m.created_at);
+  el.innerHTML = `${escapeHtml(m.body)}${time ? `<span class="bubble-time">${escapeHtml(time)}</span>` : ""}`;
   body.appendChild(el);
   body.scrollTop = body.scrollHeight;
 }
@@ -731,7 +877,8 @@ async function sendMessage() {
     };
     (DEMO_MESSAGES[sessionId] ||= []).push(msg);
     appendMessage(msg);
-    setTimeout(() => simulateDemoReply(sessionId), 900 + Math.random() * 700);
+    showTyping();
+    setTimeout(() => { hideTyping(); simulateDemoReply(sessionId); }, 1100 + Math.random() * 900);
     return;
   }
 
@@ -753,6 +900,21 @@ const DEMO_REPLIES = [
   "alright I'm down",
   "let's plan it",
 ];
+function showTyping() {
+  const body = $("#chat-body");
+  if (!body) return;
+  hideTyping();
+  const el = document.createElement("div");
+  el.className = "typing";
+  el.id = "typing-indicator";
+  el.innerHTML = `<span></span><span></span><span></span>`;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+}
+function hideTyping() {
+  document.getElementById("typing-indicator")?.remove();
+}
+
 function simulateDemoReply(sessionId) {
   if (!state.activeSession || state.activeSession.id !== sessionId) return;
   const s = state.activeSession;
@@ -889,47 +1051,105 @@ async function hydrateIdentity() {
 }
 
 // ---------- NOTIFICATIONS ----------
+const NOTIF_KIND_LABEL = { all: "All", message: "Messages", match: "Matches", reveal: "Reveals", system: "System" };
+
 function renderNotifications(root) {
   root.append($("#tpl-notifications").content.cloneNode(true));
-  const list = $("#notifications-list");
-  if (!state.notifications.length) {
-    list.innerHTML = `<div class="empty">No notifications yet.</div>`;
-    $("#mark-all-read").classList.add("hidden");
-    return;
-  }
+  state.notifFilter = state.notifFilter || "all";
 
-  list.innerHTML = "";
-  for (const n of state.notifications) {
-    const el = document.createElement("div");
-    el.className = "notif-item" + (n.unread ? " unread" : "");
-    el.innerHTML = `
-      <div class="notif-icon ${n.unread ? "" : "muted"}">${escapeHtml(n.icon || "🔔")}</div>
-      <div class="notif-body">
-        <div class="notif-title">${escapeHtml(n.title)}</div>
-        <div class="notif-text">${escapeHtml(n.text || "")}</div>
-        <div class="notif-time">${escapeHtml(n.time || "")}</div>
-      </div>
-    `;
-    el.onclick = async () => {
-      n.unread = false;
-      refreshNotifBadge();
-      if (n.session_id) {
-        await navigate("chats");
-        await openSession(n.session_id);
-      } else {
-        // re-render to clear the unread state visually
-        renderNotifications(root);
-      }
+  // Wire filter buttons
+  $$(".notif-filter").forEach((b) => {
+    b.classList.toggle("active", b.dataset.filter === state.notifFilter);
+    b.onclick = () => {
+      state.notifFilter = b.dataset.filter;
+      $$(".notif-filter").forEach((x) => x.classList.toggle("active", x.dataset.filter === state.notifFilter));
+      paintNotifications();
     };
-    list.appendChild(el);
-  }
+  });
 
   $("#mark-all-read").onclick = () => {
     state.notifications.forEach((n) => (n.unread = false));
-    refreshNotifBadge();
-    renderNotifications(root);
+    refreshBadges();
+    paintNotifications();
     toast("All caught up.");
   };
+
+  paintNotifications();
+}
+
+function paintNotifications() {
+  const list = $("#notifications-list");
+  if (!list) return;
+
+  // Update counts
+  const counts = { all: 0, message: 0, match: 0, reveal: 0, system: 0 };
+  for (const n of state.notifications) {
+    counts.all++;
+    if (counts[n.kind] !== undefined) counts[n.kind]++;
+  }
+  for (const k of Object.keys(counts)) {
+    const el = document.getElementById(`cnt-${k}`);
+    if (el) el.textContent = counts[k];
+  }
+
+  const filter = state.notifFilter || "all";
+  const items = state.notifications.filter((n) => filter === "all" || n.kind === filter);
+
+  if (!items.length) {
+    list.innerHTML = `<div class="empty">No ${NOTIF_KIND_LABEL[filter].toLowerCase()} yet.</div>`;
+    return;
+  }
+
+  // Group by .group (today / earlier) with stable order
+  const groups = [
+    { key: "today", label: "Today" },
+    { key: "earlier", label: "Earlier" },
+  ];
+  list.innerHTML = "";
+  for (const g of groups) {
+    const groupItems = items.filter((n) => (n.group || "earlier") === g.key);
+    if (!groupItems.length) continue;
+    const label = document.createElement("div");
+    label.className = "notif-group-label";
+    label.textContent = g.label;
+    list.appendChild(label);
+    for (const n of groupItems) list.appendChild(buildNotifNode(n));
+  }
+}
+
+function buildNotifNode(n) {
+  const el = document.createElement("div");
+  el.className = "notif-item" + (n.unread ? " unread" : "");
+  const actions = n.session_id
+    ? `<div class="notif-actions"><button class="btn sm">Open chat</button><button class="btn ghost sm" data-act="dismiss">Dismiss</button></div>`
+    : `<div class="notif-actions"><button class="btn ghost sm" data-act="dismiss">Dismiss</button></div>`;
+  el.innerHTML = `
+    <div class="notif-icon ${n.unread ? "" : "muted"}">${escapeHtml(n.icon || "🔔")}</div>
+    <div class="notif-body">
+      <div class="notif-title">${escapeHtml(n.title)}</div>
+      <div class="notif-text">${escapeHtml(n.text || "")}</div>
+      <div class="notif-time">${escapeHtml(n.time || "")}</div>
+      ${actions}
+    </div>
+  `;
+  el.querySelector("[data-act='dismiss']")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const idx = state.notifications.indexOf(n);
+    if (idx >= 0) state.notifications.splice(idx, 1);
+    refreshBadges();
+    paintNotifications();
+  });
+  el.onclick = async () => {
+    n.unread = false;
+    refreshBadges();
+    if (n.session_id) {
+      await navigate("chats");
+      await openSession(n.session_id);
+    } else {
+      paintNotifications();
+    }
+  };
+  return el;
 }
 
 // ---------- PROFILE ----------
