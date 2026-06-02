@@ -719,7 +719,9 @@ function buildSwipeCard(user, isFront) {
 
   card.innerHTML = `
     <div class="swipe-hero">
-      <div class="swipe-avatar">${escapeHtml(user.avatar_url || "🦊")}</div>
+      <div class="swipe-avatar-frame">
+        <div class="swipe-avatar">${escapeHtml(user.avatar_url || "🦊")}</div>
+      </div>
     </div>
     <div class="swipe-body">
       <div class="swipe-name-row">
