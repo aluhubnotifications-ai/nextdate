@@ -1923,20 +1923,46 @@ textarea { min-height: 88px; resize: vertical; }
 .swipe-like-fab:hover { transform: scale(1.08); }
 .swipe-like-fab:active { transform: scale(0.94); }
 
-.swipe-hint {
+.swipe-controls {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 16px;
   width: 100%;
-  max-width: 360px;
-  margin-top: 6px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  pointer-events: none;
+  max-width: 380px;
+  margin-top: 4px;
 }
-.swipe-hint .hint-left  { color: var(--danger);     opacity: 0.85; }
-.swipe-hint .hint-right { color: var(--brand-rose); opacity: 0.95; }
+.swipe-arrow {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border-soft);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(20, 8, 40, 0.32);
+  transition: transform .12s ease, color .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.swipe-arrow svg { width: 20px; height: 20px; }
+.swipe-arrow.left:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.swipe-arrow.right:hover {
+  color: #FFFFFF;
+  background: var(--brand-grad);
+  border-color: transparent;
+  box-shadow: 0 14px 30px var(--brand-glow);
+}
+.swipe-arrow:active { transform: scale(0.96); }
 
 .swipe-counter {
   color: var(--text-muted);
