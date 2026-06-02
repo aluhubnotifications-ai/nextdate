@@ -620,8 +620,6 @@ function makeTagInput(container, initial) {
 async function renderDiscover(root) {
   root.append($("#tpl-discover").content.cloneNode(true));
   $("#refresh-discover").onclick = () => { state.deck = null; loadDiscover(); };
-  $("#btn-pass").onclick = () => decide("pass");
-  $("#btn-like").onclick = () => decide("like");
   await loadDiscover();
 }
 
@@ -665,7 +663,7 @@ async function loadDiscover() {
 function renderDeck() {
   const stack = $("#swipe-stack");
   const counter = $("#swipe-counter");
-  const actions = $("#swipe-actions");
+  const hint = $("#swipe-hint");
   if (!stack) return;
   stack.innerHTML = "";
 
@@ -682,7 +680,7 @@ function renderDeck() {
         <p>Come back later for fresh picks, or tap reshuffle to revisit the deck.</p>
         <button class="btn" id="reshuffle-deck">Reshuffle</button>
       </div>`;
-    actions.style.visibility = "hidden";
+    if (hint) hint.style.visibility = "hidden";
     $("#reshuffle-deck")?.addEventListener("click", () => {
       state.liked.clear();
       state.passed.clear();
@@ -692,7 +690,7 @@ function renderDeck() {
     return;
   }
 
-  actions.style.visibility = "visible";
+  if (hint) hint.style.visibility = "visible";
 
   // Render up to the top 2 cards (front + ghost behind)
   const visible = state.deck.slice(0, 2).reverse();
@@ -714,6 +712,9 @@ function buildSwipeCard(user, isFront) {
   card.innerHTML = `
     <div class="swipe-hero">
       <div class="swipe-avatar">${escapeHtml(user.avatar_url || "🦊")}</div>
+      <button class="swipe-like-fab" type="button" aria-label="Like ${escapeHtml(user.nickname)}">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7-4.35-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.65-7 10-7 10z"/></svg>
+      </button>
     </div>
     <div class="swipe-body">
       <div class="swipe-name-row">
@@ -741,6 +742,14 @@ function buildSwipeCard(user, isFront) {
     infoBtn.setAttribute("aria-expanded", String(open));
   });
 
+  const likeFab = card.querySelector(".swipe-like-fab");
+  likeFab.addEventListener("pointerdown", (e) => e.stopPropagation());
+  likeFab.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!isFront) return;
+    flyAndDecide(card, "like");
+  });
+
   if (isFront) attachSwipe(card);
   return card;
 }
@@ -750,7 +759,7 @@ function attachSwipe(card) {
   const threshold = 110;
 
   const onDown = (e) => {
-    if (e.target.closest(".swipe-info")) return;
+    if (e.target.closest(".swipe-info") || e.target.closest(".swipe-like-fab")) return;
     dragging = true;
     pointerId = e.pointerId;
     startX = e.clientX; startY = e.clientY; dx = 0; dy = 0;
