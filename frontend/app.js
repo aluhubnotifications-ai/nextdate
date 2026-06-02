@@ -81,6 +81,46 @@ const DEMO_USERS = [
     gender: "Woman", zodiac_sign: "Taurus", score: 68,
     private: { real_name: "Lily W.", age: 19, cohort: "BSc CS 2027", whatsapp_number: "+250788777888" },
   },
+  {
+    user_id: "u-nia", nickname: "MoonChild", avatar_url: "🌙",
+    gender: "Woman", zodiac_sign: "Scorpio", score: 91,
+    private: { real_name: "Nia O.", age: 22, cohort: "BSc Entrepreneurial Leadership 2025", whatsapp_number: "+254712345678" },
+  },
+  {
+    user_id: "u-emeka", nickname: "PixelDealer", avatar_url: "🎮",
+    gender: "Man", zodiac_sign: "Aquarius", score: 84,
+    private: { real_name: "Emeka I.", age: 21, cohort: "BSc CS 2026", whatsapp_number: "+2348023456789" },
+  },
+  {
+    user_id: "u-sade", nickname: "CoffeeSnob", avatar_url: "☕",
+    gender: "Woman", zodiac_sign: "Capricorn", score: 80,
+    private: { real_name: "Sade A.", age: 23, cohort: "BSc IBT 2024", whatsapp_number: "+2348134567890" },
+  },
+  {
+    user_id: "u-jamal", nickname: "TrailRunner", avatar_url: "🏃",
+    gender: "Man", zodiac_sign: "Sagittarius", score: 77,
+    private: { real_name: "Jamal K.", age: 22, cohort: "BSc Global Challenges 2025", whatsapp_number: "+254723456789" },
+  },
+  {
+    user_id: "u-amara", nickname: "InkAndChai", avatar_url: "📚",
+    gender: "Woman", zodiac_sign: "Aries", score: 73,
+    private: { real_name: "Amara D.", age: 20, cohort: "BSc Entrepreneurial Leadership 2027", whatsapp_number: "+250788234567" },
+  },
+  {
+    user_id: "u-leo", nickname: "JazzNerd", avatar_url: "🎷",
+    gender: "Man", zodiac_sign: "Pisces", score: 70,
+    private: { real_name: "Leo M.", age: 24, cohort: "BSc CS 2024", whatsapp_number: "+233503456789" },
+  },
+  {
+    user_id: "u-rita", nickname: "Sunbeam", avatar_url: "🌻",
+    gender: "Woman", zodiac_sign: "Leo", score: 66,
+    private: { real_name: "Rita W.", age: 19, cohort: "BSc Global Challenges 2027", whatsapp_number: "+27834567890" },
+  },
+  {
+    user_id: "u-zane", nickname: "DesertFox", avatar_url: "🌵",
+    gender: "Non-binary", zodiac_sign: "Virgo", score: 63,
+    private: { real_name: "Zane R.", age: 22, cohort: "BSc IBT 2026", whatsapp_number: "+264811234567" },
+  },
 ];
 
 const DEMO_SESSIONS = [
@@ -630,14 +670,143 @@ async function loadDiscover() {
 }
 
 // ---------- CHATS ----------
+const EMOJI_SET = [
+  "😀","😁","😂","🤣","😊","😍","🥰","😘","😎","🤩","🥳","🤗","🤔","😴","😅","🙃",
+  "😇","🙂","😉","😋","😜","🤪","😝","🤤","😏","😒","😞","😔","😟","😕","🙁","😣",
+  "😢","😭","😤","😠","😡","🥺","😬","🤯","🤠","🤡","🥸","😈","💀","👻","👀","👋",
+  "👍","👎","🙌","👏","🙏","💪","🫶","🫰","🤝","👌","✌️","🤘","🤙","🫡","🫢","🫣",
+  "❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💖","💗","💓","💞","💕","💝","💘",
+  "✨","🔥","💯","⭐","🌟","💫","🎉","🎊","🎈","🌹","🌸","🌻","🌼","🌷","🌈","☀️",
+  "☕","🍵","🍩","🍕","🍔","🍟","🍿","🍪","🍫","🍦","🍰","🎂","🍓","🍇","🍎","🥑",
+  "🎵","🎶","🎧","🎸","🎤","🎬","📷","📸","💌","💎","🎁","🪩","🛼","⚽","🏀","🏝️",
+];
+
 async function renderChats(root) {
   root.append($("#tpl-chats").content.cloneNode(true));
   await loadSessions();
+  buildEmojiPicker();
   $("#send-btn").onclick = sendMessage;
-  $("#msg-input").addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+  $("#msg-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  $("#msg-input").addEventListener("input", autoGrowTextarea);
   $("#reveal-btn").onclick = approveReveal;
   $("#back-to-list")?.addEventListener("click", closeActiveChat);
   $("#chat-search-input")?.addEventListener("input", (e) => filterSessions(e.target.value));
+  $("#emoji-btn").onclick = toggleEmojiPanel;
+  $("#attach-btn").onclick = () => $("#file-input").click();
+  $("#file-input").addEventListener("change", onFilesPicked);
+  document.addEventListener("click", closeEmojiOnOutside);
+  state.pendingAttachments = [];
+}
+
+function autoGrowTextarea() {
+  const ta = $("#msg-input");
+  if (!ta) return;
+  ta.style.height = "auto";
+  ta.style.height = Math.min(180, ta.scrollHeight) + "px";
+}
+
+function buildEmojiPicker() {
+  const grid = $("#emoji-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  for (const e of EMOJI_SET) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "emoji-cell";
+    b.textContent = e;
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const ta = $("#msg-input");
+      const start = ta.selectionStart, end = ta.selectionEnd;
+      ta.value = ta.value.slice(0, start) + e + ta.value.slice(end);
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = start + e.length;
+      autoGrowTextarea();
+    };
+    grid.appendChild(b);
+  }
+}
+
+function toggleEmojiPanel(ev) {
+  ev?.stopPropagation();
+  const panel = $("#emoji-panel");
+  const btn = $("#emoji-btn");
+  if (!panel) return;
+  const isOpen = !panel.classList.contains("hidden");
+  panel.classList.toggle("hidden", isOpen);
+  btn?.classList.toggle("active", !isOpen);
+}
+
+function closeEmojiOnOutside(ev) {
+  const panel = $("#emoji-panel");
+  if (!panel || panel.classList.contains("hidden")) return;
+  if (ev.target.closest("#emoji-panel") || ev.target.closest("#emoji-btn")) return;
+  panel.classList.add("hidden");
+  $("#emoji-btn")?.classList.remove("active");
+}
+
+function onFilesPicked(ev) {
+  const files = Array.from(ev.target.files || []);
+  for (const f of files) addAttachment(f);
+  ev.target.value = "";
+}
+
+function fileKindIcon(name, type) {
+  if ((type || "").startsWith("image/")) return "🖼️";
+  if ((type || "").startsWith("video/")) return "🎬";
+  if ((type || "").startsWith("audio/")) return "🎵";
+  if (/\.pdf$/i.test(name)) return "📄";
+  if (/\.(docx?|odt|rtf|txt)$/i.test(name)) return "📝";
+  if (/\.(xlsx?|csv)$/i.test(name)) return "📊";
+  if (/\.(zip|rar|7z|tar|gz)$/i.test(name)) return "🗜️";
+  return "📎";
+}
+
+function formatBytes(b) {
+  if (!b && b !== 0) return "";
+  if (b < 1024) return b + " B";
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + " KB";
+  return (b / 1024 / 1024).toFixed(1) + " MB";
+}
+
+function addAttachment(file) {
+  const att = {
+    id: `a-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    preview: null,
+  };
+  state.pendingAttachments.push(att);
+  if (file.type?.startsWith("image/")) {
+    const reader = new FileReader();
+    reader.onload = (e) => { att.preview = e.target.result; renderPendingAttachments(); };
+    reader.readAsDataURL(file);
+  }
+  renderPendingAttachments();
+}
+
+function renderPendingAttachments() {
+  const wrap = $("#composer-attachments");
+  if (!wrap) return;
+  if (!state.pendingAttachments.length) { wrap.classList.add("hidden"); wrap.innerHTML = ""; return; }
+  wrap.classList.remove("hidden");
+  wrap.innerHTML = "";
+  for (const a of state.pendingAttachments) {
+    const chip = document.createElement("div");
+    chip.className = "attachment-chip";
+    const thumb = a.preview
+      ? `<span class="att-thumb"><img src="${a.preview}" alt=""/></span>`
+      : `<span class="att-thumb">${fileKindIcon(a.name, a.type)}</span>`;
+    chip.innerHTML = `${thumb}<span class="att-name">${escapeHtml(a.name)}</span><span class="muted" style="font-size:11px;">${formatBytes(a.size)}</span><button class="att-remove" type="button" aria-label="Remove">×</button>`;
+    chip.querySelector(".att-remove").onclick = () => {
+      state.pendingAttachments = state.pendingAttachments.filter((x) => x.id !== a.id);
+      renderPendingAttachments();
+    };
+    wrap.appendChild(chip);
+  }
 }
 
 function closeActiveChat() {
@@ -855,16 +1024,42 @@ function appendMessage(m) {
   const el = document.createElement("div");
   el.className = "bubble " + (m.sender_id === state.user.id ? "mine" : "");
   const time = formatClock(m.created_at);
-  el.innerHTML = `${escapeHtml(m.body)}${time ? `<span class="bubble-time">${escapeHtml(time)}</span>` : ""}`;
+  const attachmentsHtml = renderBubbleAttachments(m.attachments);
+  const textHtml = m.body ? escapeHtml(m.body) : "";
+  el.innerHTML = `${attachmentsHtml}${textHtml}${time ? `<span class="bubble-time">${escapeHtml(time)}</span>` : ""}`;
   body.appendChild(el);
   body.scrollTop = body.scrollHeight;
+}
+
+function renderBubbleAttachments(atts) {
+  if (!atts || !atts.length) return "";
+  let html = `<div class="bubble-attachments">`;
+  for (const a of atts) {
+    if (a.preview && (a.type || "").startsWith("image/")) {
+      html += `<div class="bubble-attachment-image"><img src="${a.preview}" alt="${escapeHtml(a.name)}"/></div>`;
+    } else {
+      html += `<div class="bubble-attachment">
+        <span class="att-thumb">${fileKindIcon(a.name, a.type)}</span>
+        <span style="min-width:0; flex:1;">
+          <span class="att-name" style="display:block;">${escapeHtml(a.name)}</span>
+          <span class="att-size">${formatBytes(a.size)}</span>
+        </span>
+      </div>`;
+    }
+  }
+  html += `</div>`;
+  return html;
 }
 
 async function sendMessage() {
   const input = $("#msg-input");
   const body = input.value.trim();
-  if (!body || !state.activeSession) return;
+  const attachments = (state.pendingAttachments || []).slice();
+  if ((!body && !attachments.length) || !state.activeSession) return;
   input.value = "";
+  state.pendingAttachments = [];
+  renderPendingAttachments();
+  autoGrowTextarea();
   const sessionId = state.activeSession.id;
 
   if (DEMO_MODE) {
@@ -873,6 +1068,7 @@ async function sendMessage() {
       session_id: sessionId,
       sender_id: state.user.id,
       body,
+      attachments,
       created_at: new Date().toISOString(),
     };
     (DEMO_MESSAGES[sessionId] ||= []).push(msg);
