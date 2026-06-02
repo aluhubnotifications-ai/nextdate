@@ -267,11 +267,27 @@
           </div>
           <div id="identity-panel" class="identity-panel hidden"></div>
           <div id="chat-body" class="chat-body"></div>
-          <div class="chat-input">
-            <input id="msg-input" placeholder="Type a message…" autocomplete="off" />
-            <button class="btn send-btn" id="send-btn" aria-label="Send">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            </button>
+          <div class="composer">
+            <div class="composer-emoji-panel hidden" id="emoji-panel">
+              <div class="emoji-panel-head">Emojis</div>
+              <div class="emoji-grid" id="emoji-grid"></div>
+            </div>
+            <div class="composer-attachments hidden" id="composer-attachments"></div>
+            <div class="composer-row">
+              <div class="composer-actions">
+                <button class="composer-btn" id="emoji-btn" type="button" aria-label="Insert emoji" title="Emoji">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                </button>
+                <button class="composer-btn" id="attach-btn" type="button" aria-label="Attach file" title="Attach file">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.57 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </button>
+                <input type="file" id="file-input" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" hidden />
+              </div>
+              <textarea id="msg-input" placeholder="Type a message…" rows="1" autocomplete="off"></textarea>
+              <button class="btn send-btn" id="send-btn" aria-label="Send">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
           </div>
         </div>
       </section>
