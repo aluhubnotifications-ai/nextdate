@@ -1,26 +1,127 @@
-// ALU Match — Cloudflare Pages frontend
+// ALU Match — frontend
 // Custom auth (FastAPI backend) + Supabase Realtime/Postgres for data.
-// Runtime config is fetched from /api/config (a Cloudflare Pages Function
-// that reads values from the project's environment variables). No URLs
-// or keys are baked into the bundle.
+//
+// ───── HARDCODED CONFIG ─────
+// Edit the four constants below for your deployment.
+// Matching is intentionally left to be swapped with an AI-driven engine later.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-let SUPABASE_URL = "";
-let SUPABASE_ANON_KEY = "";
-let BACKEND_URL = "";
-let EMAIL_DOMAINS = [];
+const SUPABASE_URL      = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR-SUPABASE-ANON-KEY";
+const BACKEND_URL       = "https://alu-match-engine.onrender.com";
+const EMAIL_DOMAINS     = ["alustudent.com", "aluedu.org"];
 
-async function loadAppConfig() {
-  const res = await fetch("/api/config", { cache: "no-store" });
-  if (!res.ok) throw new Error(`config endpoint ${res.status}`);
-  const cfg = await res.json();
-  SUPABASE_URL      = cfg.SUPABASE_URL;
-  SUPABASE_ANON_KEY = cfg.SUPABASE_ANON_KEY;
-  BACKEND_URL       = cfg.BACKEND_URL;
-  EMAIL_DOMAINS     = cfg.EMAIL_DOMAINS || [];
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !BACKEND_URL) {
-    throw new Error("Pages env vars not set: SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL.");
-  }
+// ───── DEMO MODE ─────
+// When true, the app runs entirely on hardcoded users / sessions / messages
+// below. No Supabase, no backend. Flip to false once your AI matching engine
+// + Supabase tables are wired up.
+const DEMO_MODE = true;
+
+const DEMO_ME = {
+  id: "u-me",
+  email: "you@alustudent.com",
+  profile: {
+    id: "u-me",
+    nickname: "You",
+    avatar_url: "🦊",
+    gender: "Prefer not to say",
+    zodiac_sign: "Leo",
+  },
+  prefs: {
+    user_id: "u-me",
+    target_intent: "Friendships",
+    term_length: "Long-term",
+    interests: ["afrobeats", "climate-tech", "design"],
+    hobbies: ["chess", "running"],
+    leisure_time: "Long walks, good coffee, weekend hikes around Kigali.",
+    wants_in_relationship: "Curious mind, kind heart, makes me laugh.",
+  },
+  private: {
+    user_id: "u-me",
+    real_name: "Your Real Name",
+    age: 21,
+    cohort: "BSc CS 2026",
+    whatsapp_number: "+250700000000",
+  },
+};
+
+const DEMO_USERS = [
+  {
+    user_id: "u-aisha", nickname: "NightOwl", avatar_url: "🦄",
+    gender: "Woman", zodiac_sign: "Pisces", score: 94,
+    private: { real_name: "Aisha M.", age: 20, cohort: "BSc Global Challenges 2026", whatsapp_number: "+250788111222" },
+  },
+  {
+    user_id: "u-kofi", nickname: "JollofKing", avatar_url: "🦁",
+    gender: "Man", zodiac_sign: "Leo", score: 88,
+    private: { real_name: "Kofi A.", age: 22, cohort: "BSc IBT 2025", whatsapp_number: "+233244555666" },
+  },
+  {
+    user_id: "u-thandi", nickname: "Bloom", avatar_url: "🌸",
+    gender: "Woman", zodiac_sign: "Libra", score: 82,
+    private: { real_name: "Thandi N.", age: 21, cohort: "BSc Entrepreneurial Leadership 2026", whatsapp_number: "+27821234567" },
+  },
+  {
+    user_id: "u-david", nickname: "OctoCoder", avatar_url: "🐙",
+    gender: "Man", zodiac_sign: "Virgo", score: 79,
+    private: { real_name: "David O.", age: 23, cohort: "BSc CS 2025", whatsapp_number: "+254700111222" },
+  },
+  {
+    user_id: "u-zara", nickname: "BeeKween", avatar_url: "🐝",
+    gender: "Non-binary", zodiac_sign: "Gemini", score: 76,
+    private: { real_name: "Zara K.", age: 20, cohort: "BSc Global Challenges 2027", whatsapp_number: "+260977333444" },
+  },
+  {
+    user_id: "u-marcus", nickname: "Tortuga", avatar_url: "🐢",
+    gender: "Man", zodiac_sign: "Cancer", score: 71,
+    private: { real_name: "Marcus B.", age: 24, cohort: "BSc IBT 2024", whatsapp_number: "+255712999888" },
+  },
+  {
+    user_id: "u-lily", nickname: "PandaVibes", avatar_url: "🐼",
+    gender: "Woman", zodiac_sign: "Taurus", score: 68,
+    private: { real_name: "Lily W.", age: 19, cohort: "BSc CS 2027", whatsapp_number: "+250788777888" },
+  },
+];
+
+const DEMO_SESSIONS = [
+  {
+    id: "s-aisha", user_a: "u-me", user_b: "u-aisha",
+    user_a_approved_reveal: false, user_b_approved_reveal: false,
+    created_at: "2026-05-30T10:00:00Z",
+  },
+  {
+    id: "s-kofi", user_a: "u-kofi", user_b: "u-me",
+    user_a_approved_reveal: true, user_b_approved_reveal: false,
+    created_at: "2026-05-28T16:20:00Z",
+  },
+  {
+    id: "s-thandi", user_a: "u-me", user_b: "u-thandi",
+    user_a_approved_reveal: true, user_b_approved_reveal: true,
+    created_at: "2026-05-25T09:00:00Z",
+  },
+];
+
+const DEMO_MESSAGES = {
+  "s-aisha": [
+    { id: "m-1", session_id: "s-aisha", sender_id: "u-aisha", body: "hey! saw we matched 👀 how's your week going?", created_at: "2026-05-30T10:01:00Z" },
+    { id: "m-2", session_id: "s-aisha", sender_id: "u-me",    body: "honestly chaotic, three group projects 😅 you?", created_at: "2026-05-30T10:02:30Z" },
+    { id: "m-3", session_id: "s-aisha", sender_id: "u-aisha", body: "same lol. coffee at Java House this weekend?", created_at: "2026-05-30T10:04:00Z" },
+  ],
+  "s-kofi": [
+    { id: "m-4", session_id: "s-kofi", sender_id: "u-kofi", body: "yo, you're into afrobeats too?", created_at: "2026-05-28T16:21:00Z" },
+    { id: "m-5", session_id: "s-kofi", sender_id: "u-me",   body: "obviously. Rema or Asake?", created_at: "2026-05-28T16:22:00Z" },
+    { id: "m-6", session_id: "s-kofi", sender_id: "u-kofi", body: "Asake every day. revealed my identity btw, no pressure on yours", created_at: "2026-05-28T16:25:00Z" },
+  ],
+  "s-thandi": [
+    { id: "m-7", session_id: "s-thandi", sender_id: "u-thandi", body: "the climate-tech club meets Thursdays if you wanna pull up", created_at: "2026-05-25T09:05:00Z" },
+    { id: "m-8", session_id: "s-thandi", sender_id: "u-me",     body: "I'll be there!", created_at: "2026-05-25T09:06:00Z" },
+    { id: "m-9", session_id: "s-thandi", sender_id: "u-thandi", body: "perfect — see you there 🌱", created_at: "2026-05-25T09:07:00Z" },
+  ],
+};
+
+function demoPeer(id) {
+  if (id === DEMO_ME.id) return DEMO_ME.profile;
+  return DEMO_USERS.find((u) => u.user_id === id) || { nickname: "Unknown", avatar_url: "🦊" };
 }
 
 // ---------- token storage ----------
@@ -134,18 +235,22 @@ function setNavVisible(visible) {
 
 // ---------- init ----------
 (async function init() {
-  try {
-    await loadAppConfig();
-  } catch (err) {
+  if (DEMO_MODE) {
+    state.user            = { id: DEMO_ME.id, email: DEMO_ME.email };
+    state.profile         = DEMO_ME.profile;
+    state.prefs           = DEMO_ME.prefs;
+    state.privateIdentity = DEMO_ME.private;
+    setNavVisible(true);
+    return navigate("discover");
+  }
+
+  if (SUPABASE_URL.includes("YOUR-PROJECT") || SUPABASE_ANON_KEY.includes("YOUR-")) {
     $("#view-root").innerHTML = `
       <section class="center-wrap"><div class="card auth-card">
         <h1>Setup needed</h1>
-        <p class="muted">${escapeHtml(err.message)}</p>
-        <p class="muted" style="font-size:12px;">
-          In Cloudflare Pages → your project → Settings → Environment variables,
-          set <b>SUPABASE_URL</b>, <b>SUPABASE_ANON_KEY</b>, <b>BACKEND_URL</b>,
-          and optionally <b>EMAIL_DOMAINS</b>. Then redeploy.
-        </p>
+        <p class="muted">Open <b>frontend/app.js</b> and replace the hardcoded
+          <b>SUPABASE_URL</b>, <b>SUPABASE_ANON_KEY</b>, and <b>BACKEND_URL</b>
+          constants at the top of the file with your project's values.</p>
       </div></section>`;
     return;
   }
@@ -220,6 +325,7 @@ function renderAuth(root) {
 }
 
 async function doLogout() {
+  if (DEMO_MODE) { toast("Demo mode — no real session to sign out of."); return; }
   clearSession();
   state.user = null;
   setNavVisible(false);
@@ -280,6 +386,18 @@ function renderOnboarding(root) {
       cohort: $("#cohort").value || null,
       whatsapp_number: $("#whatsapp_number").value || null,
     };
+
+    if (DEMO_MODE) {
+      state.profile         = profilePayload;
+      state.prefs           = prefsPayload;
+      state.privateIdentity = privPayload;
+      DEMO_ME.profile       = profilePayload;
+      DEMO_ME.prefs         = prefsPayload;
+      DEMO_ME.private       = privPayload;
+      toast("Saved (demo).");
+      navigate("discover");
+      return;
+    }
 
     const [p1, p2, p3] = await Promise.all([
       supabase.from("profiles").upsert(profilePayload, { onConflict: "id" }).select().single(),
@@ -342,11 +460,15 @@ async function loadDiscover() {
   grid.innerHTML = `<div class="empty">Finding compatible people…</div>`;
 
   let suggestions = [];
-  try {
-    suggestions = await api(`/suggestions/${state.user.id}`);
-  } catch (err) {
-    grid.innerHTML = `<div class="empty">Couldn't reach the matching engine.<br/><span class="muted">${err.message}</span></div>`;
-    return;
+  if (DEMO_MODE) {
+    suggestions = DEMO_USERS;
+  } else {
+    try {
+      suggestions = await api(`/suggestions/${state.user.id}`);
+    } catch (err) {
+      grid.innerHTML = `<div class="empty">Couldn't reach the matching engine.<br/><span class="muted">${err.message}</span></div>`;
+      return;
+    }
   }
 
   if (!suggestions.length) {
@@ -372,6 +494,25 @@ async function loadDiscover() {
       <button class="btn" data-uid="${s.user_id}">Say hi</button>
     `;
     card.querySelector("button").onclick = async () => {
+      if (DEMO_MODE) {
+        let sess = DEMO_SESSIONS.find(
+          (x) => (x.user_a === s.user_id && x.user_b === DEMO_ME.id) ||
+                 (x.user_b === s.user_id && x.user_a === DEMO_ME.id),
+        );
+        if (!sess) {
+          sess = {
+            id: `s-${s.user_id}-${Date.now()}`,
+            user_a: DEMO_ME.id, user_b: s.user_id,
+            user_a_approved_reveal: false, user_b_approved_reveal: false,
+            created_at: new Date().toISOString(),
+          };
+          DEMO_SESSIONS.unshift(sess);
+          DEMO_MESSAGES[sess.id] = [];
+        }
+        await navigate("chats");
+        await openSession(sess.id);
+        return;
+      }
       const { data, error } = await supabase.rpc("open_chat_session", { other: s.user_id });
       if (error) return toast(error.message);
       await navigate("chats");
@@ -394,23 +535,36 @@ async function loadSessions() {
   const list = $("#session-list");
   list.innerHTML = "";
 
-  const { data, error } = await supabase
-    .from("chat_sessions")
-    .select("*")
-    .or(`user_a.eq.${state.user.id},user_b.eq.${state.user.id}`)
-    .order("created_at", { ascending: false });
-  if (error) return toast(error.message);
+  let data;
+  if (DEMO_MODE) {
+    data = [...DEMO_SESSIONS].filter(
+      (s) => s.user_a === state.user.id || s.user_b === state.user.id,
+    );
+  } else {
+    const res = await supabase
+      .from("chat_sessions")
+      .select("*")
+      .or(`user_a.eq.${state.user.id},user_b.eq.${state.user.id}`)
+      .order("created_at", { ascending: false });
+    if (res.error) return toast(res.error.message);
+    data = res.data;
+  }
   if (!data?.length) {
     list.innerHTML = `<div class="muted" style="font-size:13px;">No chats yet.</div>`;
     return;
   }
 
-  const peerIds = data.map((s) => (s.user_a === state.user.id ? s.user_b : s.user_a));
-  const { data: peers } = await supabase
-    .from("profiles")
-    .select("id, nickname, avatar_url")
-    .in("id", peerIds);
-  const peerMap = Object.fromEntries((peers || []).map((p) => [p.id, p]));
+  let peerMap;
+  if (DEMO_MODE) {
+    peerMap = Object.fromEntries(DEMO_USERS.map((u) => [u.user_id, { id: u.user_id, nickname: u.nickname, avatar_url: u.avatar_url }]));
+  } else {
+    const peerIds = data.map((s) => (s.user_a === state.user.id ? s.user_b : s.user_a));
+    const { data: peers } = await supabase
+      .from("profiles")
+      .select("id, nickname, avatar_url")
+      .in("id", peerIds);
+    peerMap = Object.fromEntries((peers || []).map((p) => [p.id, p]));
+  }
 
   for (const s of data) {
     const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
@@ -432,15 +586,25 @@ async function loadSessions() {
 async function openSession(sessionId) {
   cleanupRealtime();
 
-  const { data: s, error } = await supabase
-    .from("chat_sessions").select("*").eq("id", sessionId).single();
-  if (error) return toast(error.message);
+  let s, peer;
+  if (DEMO_MODE) {
+    s = DEMO_SESSIONS.find((x) => x.id === sessionId);
+    if (!s) return toast("Session not found");
+    const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
+    const u = DEMO_USERS.find((x) => x.user_id === peerId);
+    peer = u
+      ? { id: u.user_id, nickname: u.nickname, avatar_url: u.avatar_url, gender: u.gender, zodiac_sign: u.zodiac_sign }
+      : { id: peerId, nickname: "Unknown", avatar_url: "🦊", gender: "", zodiac_sign: "" };
+  } else {
+    const res = await supabase.from("chat_sessions").select("*").eq("id", sessionId).single();
+    if (res.error) return toast(res.error.message);
+    s = res.data;
+    const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
+    const pRes = await supabase.from("profiles").select("id, nickname, avatar_url, gender, zodiac_sign").eq("id", peerId).single();
+    peer = pRes.data;
+  }
 
   const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
-  const { data: peer } = await supabase
-    .from("profiles").select("id, nickname, avatar_url, gender, zodiac_sign")
-    .eq("id", peerId).single();
-
   state.activeSession = { ...s, peer_id: peerId, peer_profile: peer };
 
   $$(".session-item").forEach((el) => el.classList.toggle("active", el.dataset.sessionId === sessionId));
@@ -454,18 +618,24 @@ async function openSession(sessionId) {
 
   await loadMessages(sessionId);
   await refreshRevealState();
-  subscribeRealtime(sessionId);
+  if (!DEMO_MODE) subscribeRealtime(sessionId);
 }
 
 async function loadMessages(sessionId) {
   const body = $("#chat-body");
   body.innerHTML = "";
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("session_id", sessionId)
-    .order("created_at", { ascending: true });
-  if (error) return toast(error.message);
+  let data;
+  if (DEMO_MODE) {
+    data = (DEMO_MESSAGES[sessionId] || []).slice().sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+  } else {
+    const res = await supabase
+      .from("messages")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+    if (res.error) return toast(res.error.message);
+    data = res.data;
+  }
   for (const m of data || []) appendMessage(m);
   body.scrollTop = body.scrollHeight;
 }
@@ -484,12 +654,53 @@ async function sendMessage() {
   const body = input.value.trim();
   if (!body || !state.activeSession) return;
   input.value = "";
+  const sessionId = state.activeSession.id;
+
+  if (DEMO_MODE) {
+    const msg = {
+      id: `m-${Date.now()}`,
+      session_id: sessionId,
+      sender_id: state.user.id,
+      body,
+      created_at: new Date().toISOString(),
+    };
+    (DEMO_MESSAGES[sessionId] ||= []).push(msg);
+    appendMessage(msg);
+    setTimeout(() => simulateDemoReply(sessionId), 900 + Math.random() * 700);
+    return;
+  }
+
   const { error } = await supabase.from("messages").insert({
-    session_id: state.activeSession.id,
+    session_id: sessionId,
     sender_id: state.user.id,
     body,
   });
   if (error) toast(error.message);
+}
+
+const DEMO_REPLIES = [
+  "haha for real",
+  "totally agree",
+  "wait say more",
+  "okay you're funny",
+  "hmm interesting take",
+  "lol no way",
+  "alright I'm down",
+  "let's plan it",
+];
+function simulateDemoReply(sessionId) {
+  if (!state.activeSession || state.activeSession.id !== sessionId) return;
+  const s = state.activeSession;
+  const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
+  const reply = {
+    id: `m-${Date.now()}`,
+    session_id: sessionId,
+    sender_id: peerId,
+    body: DEMO_REPLIES[Math.floor(Math.random() * DEMO_REPLIES.length)],
+    created_at: new Date().toISOString(),
+  };
+  (DEMO_MESSAGES[sessionId] ||= []).push(reply);
+  appendMessage(reply);
 }
 
 function subscribeRealtime(sessionId) {
@@ -516,6 +727,7 @@ function subscribeRealtime(sessionId) {
 }
 
 function cleanupRealtime() {
+  if (!supabase) { state.messagesChannel = null; state.sessionChannel = null; return; }
   if (state.messagesChannel) { supabase.removeChannel(state.messagesChannel); state.messagesChannel = null; }
   if (state.sessionChannel)  { supabase.removeChannel(state.sessionChannel);  state.sessionChannel  = null; }
 }
@@ -565,6 +777,16 @@ async function approveReveal() {
   if (!s) return;
   const meIsA = state.user.id === s.user_a;
   const patch = meIsA ? { user_a_approved_reveal: true } : { user_b_approved_reveal: true };
+
+  if (DEMO_MODE) {
+    const stored = DEMO_SESSIONS.find((x) => x.id === s.id);
+    if (stored) Object.assign(stored, patch);
+    state.activeSession = { ...state.activeSession, ...patch };
+    await refreshRevealState();
+    toast("Reveal recorded.");
+    return;
+  }
+
   const { data, error } = await supabase
     .from("chat_sessions").update(patch).eq("id", s.id).select().single();
   if (error) return toast(error.message);
@@ -575,9 +797,16 @@ async function approveReveal() {
 
 async function hydrateIdentity() {
   const s = state.activeSession;
-  const { data, error } = await supabase.rpc("get_revealed_identity", { session: s.id });
-  if (error) return toast(error.message);
-  const id = (data && data[0]) || null;
+  let id;
+  if (DEMO_MODE) {
+    const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
+    const peer = DEMO_USERS.find((u) => u.user_id === peerId);
+    id = peer ? peer.private : null;
+  } else {
+    const { data, error } = await supabase.rpc("get_revealed_identity", { session: s.id });
+    if (error) return toast(error.message);
+    id = (data && data[0]) || null;
+  }
   const panel = $("#identity-panel");
   if (!id) {
     panel.innerHTML = `<div class="muted">No private identity on file for this user yet.</div>`;

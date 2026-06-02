@@ -4,9 +4,9 @@ A campus-only matchmaking app for ALU students. Identities stay hidden until
 both people in a chat tap **Reveal**.
 
 ```
-Cloudflare Pages (frontend)
+Static frontend (Cloudflare Pages / any static host)
         │
-        ├─ HTTP ──► FastAPI on Render  ──► reads hidden prefs, returns public cards
+        ├─ HTTP ──► FastAPI on Render  ──► AI matching (planned), returns public cards
         │
         └─ WebSocket ──► Supabase Realtime ──► instant chat
 ```
@@ -60,32 +60,33 @@ Deploy on Render using `backend/render.yaml`. Set env vars:
 - `GET  /auth/me`     (Authorization: Bearer …) → current user
 - `GET  /suggestions/{user_id}` → matched cards (caller must equal `user_id`)
 
-## 3 · Frontend (Cloudflare Pages)
-Deploy `frontend/` as a static site. **No values live in the repo** —
-runtime config is served by a Pages Function (`frontend/functions/api/config.js`)
-that reads from Pages environment variables.
+## 3 · Frontend (static)
+Deploy `frontend/` as a static site (Cloudflare Pages, Netlify, GitHub
+Pages, etc.).
 
-In Cloudflare Pages → your project → **Settings → Environment variables**,
-add (Production + Preview):
+Runtime config is **hardcoded** at the top of `frontend/app.js`. Open it
+and edit these four constants for your deployment:
 
-| Key | Example |
-|---|---|
-| `SUPABASE_URL` | `https://xxxxx.supabase.co` |
-| `SUPABASE_ANON_KEY` | `eyJhbGciOi...` |
-| `BACKEND_URL` | `https://alu-match-engine.onrender.com` |
-| `EMAIL_DOMAINS` *(optional)* | `alustudent.com,aluedu.org` |
+```js
+const SUPABASE_URL      = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR-SUPABASE-ANON-KEY";
+const BACKEND_URL       = "https://alu-match-engine.onrender.com";
+const EMAIL_DOMAINS     = ["alustudent.com", "aluedu.org"];
+```
 
-Build settings:
+The Supabase **anon** key is meant to be public — it's the same value
+the browser would receive from any runtime config endpoint, and Supabase
+RLS does the actual access control. Do **not** put the `service_role`
+key in here; that one stays on the backend only.
+
+Build settings (for Cloudflare Pages / Netlify):
 - **Build command**: *(blank)*
 - **Build output directory**: `frontend`
 
-For local development with the same model, use Cloudflare's local dev
-server so the Pages Function works:
+For local development just serve the folder:
 ```
-npm install -g wrangler
 cd frontend
-SUPABASE_URL=... SUPABASE_ANON_KEY=... BACKEND_URL=... \
-  wrangler pages dev . --port 5173
+python3 -m http.server 5173
 ```
 
 ## Auth model
