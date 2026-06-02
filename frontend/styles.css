@@ -2134,3 +2134,128 @@ textarea { min-height: 88px; resize: vertical; }
     rgba(255, 255, 255, 0.65);
   box-shadow: 0 30px 70px rgba(190, 140, 170, 0.32), 0 0 0 1px rgba(255,255,255,0.5) inset;
 }
+
+/* ============================================================
+   PER-SECTION AMBIENT BACKGROUNDS
+   Each major view gets its own subtle gradient + glow so the user
+   feels the shift when switching tabs, without losing the
+   "Dusk Bloom" brand language. The glow is anchored to corners
+   so it never overlaps text density.
+   ============================================================ */
+#view-root {
+  position: relative;
+  transition: background .35s ease;
+}
+#view-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.9;
+  transition: opacity .4s ease, background .4s ease;
+}
+
+/* Discover — warm coral & rose dusk (matches the brand action). */
+#view-root[data-section="discover"]::before {
+  background:
+    radial-gradient(900px 600px at 85% -10%, rgba(255, 138, 91, 0.22), transparent 60%),
+    radial-gradient(720px 480px at 0% 10%,   rgba(255, 61, 110, 0.16), transparent 60%),
+    radial-gradient(900px 700px at 50% 110%, rgba(139, 92, 246, 0.12), transparent 60%);
+}
+
+/* Messages — cool indigo & teal (focus, calm chat). */
+#view-root[data-section="chats"]::before {
+  background:
+    radial-gradient(900px 600px at 10% -10%, rgba(99, 132, 255, 0.20), transparent 60%),
+    radial-gradient(700px 500px at 100% 30%, rgba(52, 217, 200, 0.14), transparent 60%),
+    radial-gradient(900px 700px at 60% 110%, rgba(80, 70, 160, 0.16), transparent 60%);
+}
+
+/* Matches — fuchsia & blush (the love feed). */
+#view-root[data-section="matches"]::before {
+  background:
+    radial-gradient(900px 600px at 50% -10%, rgba(255, 92, 158, 0.24), transparent 60%),
+    radial-gradient(720px 480px at 0% 60%,   rgba(255, 138, 91, 0.16), transparent 60%),
+    radial-gradient(900px 700px at 100% 110%, rgba(186, 92, 255, 0.16), transparent 60%);
+}
+
+/* Notifications — amber & gold (alerts, attention). */
+#view-root[data-section="notifications"]::before {
+  background:
+    radial-gradient(900px 600px at 90% -10%, rgba(255, 181, 71, 0.22), transparent 60%),
+    radial-gradient(720px 480px at 10% 30%,  rgba(255, 138, 91, 0.16), transparent 60%),
+    radial-gradient(900px 700px at 50% 110%, rgba(139, 92, 246, 0.10), transparent 60%);
+}
+
+/* Profile — deep violet & mint (identity, growth). */
+#view-root[data-section="profile"]::before {
+  background:
+    radial-gradient(900px 600px at 15% -10%, rgba(139, 92, 246, 0.22), transparent 60%),
+    radial-gradient(720px 480px at 100% 20%, rgba(52, 217, 160, 0.12), transparent 60%),
+    radial-gradient(900px 700px at 50% 110%, rgba(255, 92, 158, 0.10), transparent 60%);
+}
+
+/* Onboarding & auth share a welcoming sunrise. */
+#view-root[data-section="onboarding"]::before,
+#view-root[data-section="auth"]::before {
+  background:
+    radial-gradient(900px 600px at 50% -10%, rgba(255, 181, 71, 0.20), transparent 60%),
+    radial-gradient(720px 480px at 0% 60%,   rgba(255, 138, 91, 0.16), transparent 60%),
+    radial-gradient(900px 700px at 100% 110%, rgba(255, 61, 110, 0.14), transparent 60%);
+}
+
+/* Light theme — soften the glows so they don't blow out on white. */
+[data-theme="light"] #view-root::before { opacity: 0.6; }
+
+/* ============================================================
+   MOBILE — sizing pass for the Discover deck
+   ============================================================ */
+@media (max-width: 760px) {
+  .discover-shell {
+    max-width: 100%;
+    padding: 16px 14px 18px;
+    margin: 4px 0 18px;
+    gap: 12px;
+    border-radius: 24px;
+  }
+  .discover-title { font-size: 22px; }
+  .discover-sub   { font-size: 12px; }
+
+  .swipe-stack { max-height: 56dvh; }
+  .swipe-card  { gap: 10px; }
+
+  .swipe-hero          { padding: 16px; border-radius: 22px; }
+  .swipe-avatar-frame  { padding: 10px 18px; border-radius: 20px; }
+  .swipe-avatar        { font-size: 104px; }
+
+  .swipe-body { padding: 14px 16px 16px; border-radius: 18px; gap: 2px; }
+  .swipe-name { font-size: 22px; }
+  .swipe-meta { font-size: 13px; }
+  .swipe-info { width: 28px; height: 28px; }
+  .swipe-info svg { width: 16px; height: 16px; }
+
+  .swipe-actions      { gap: 22px; }
+  .swipe-btn          { width: 54px; height: 54px; }
+  .swipe-btn svg      { width: 22px; height: 22px; }
+  .swipe-btn.like     { width: 64px; height: 64px; }
+  .swipe-btn.like svg { width: 26px; height: 26px; }
+  .swipe-counter      { font-size: 12px; }
+  .swipe-overlay      { font-size: 18px; padding: 6px 12px; top: 18px; letter-spacing: 2px; }
+
+  .matches-grid       { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .match-tile         { padding: 14px 8px 12px; border-radius: 16px; }
+  .match-avatar       { width: 72px; height: 72px; font-size: 34px; }
+  .match-name         { font-size: 14px; }
+}
+
+@media (max-width: 380px) {
+  .discover-shell  { padding: 12px 10px 14px; border-radius: 20px; }
+  .swipe-stack     { max-height: 54dvh; }
+  .swipe-avatar    { font-size: 88px; }
+  .swipe-name      { font-size: 20px; }
+  .swipe-actions   { gap: 16px; }
+  .swipe-btn       { width: 50px; height: 50px; }
+  .swipe-btn.like  { width: 58px; height: 58px; }
+  .match-avatar    { width: 64px; height: 64px; font-size: 30px; }
+}

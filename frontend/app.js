@@ -298,6 +298,9 @@ async function navigate(name) {
   root.innerHTML = "";
   // Chat view should fill the entire panel; other views get padded scroll area
   root.classList.toggle("flush", name === "chats");
+  // Tag the view root with the active view name so each section can
+  // own its background, accent color, and ambient glow.
+  root.dataset.section = name;
   root.classList.toggle("discover", name === "discover");
   document.querySelectorAll("[data-view]").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === name),
