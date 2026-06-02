@@ -1,27 +1,15 @@
-// ALU Match — Cloudflare Pages frontend
+// ALU Match — frontend
 // Custom auth (FastAPI backend) + Supabase Realtime/Postgres for data.
-// Runtime config is fetched from /api/config (a Cloudflare Pages Function
-// that reads values from the project's environment variables). No URLs
-// or keys are baked into the bundle.
+//
+// ───── HARDCODED CONFIG ─────
+// Edit the four constants below for your deployment.
+// Matching is intentionally left to be swapped with an AI-driven engine later.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-let SUPABASE_URL = "";
-let SUPABASE_ANON_KEY = "";
-let BACKEND_URL = "";
-let EMAIL_DOMAINS = [];
-
-async function loadAppConfig() {
-  const res = await fetch("/api/config", { cache: "no-store" });
-  if (!res.ok) throw new Error(`config endpoint ${res.status}`);
-  const cfg = await res.json();
-  SUPABASE_URL      = cfg.SUPABASE_URL;
-  SUPABASE_ANON_KEY = cfg.SUPABASE_ANON_KEY;
-  BACKEND_URL       = cfg.BACKEND_URL;
-  EMAIL_DOMAINS     = cfg.EMAIL_DOMAINS || [];
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !BACKEND_URL) {
-    throw new Error("Pages env vars not set: SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL.");
-  }
-}
+const SUPABASE_URL      = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR-SUPABASE-ANON-KEY";
+const BACKEND_URL       = "https://alu-match-engine.onrender.com";
+const EMAIL_DOMAINS     = ["alustudent.com", "aluedu.org"];
 
 // ---------- token storage ----------
 const TOKEN_KEY = "alu_match_token";
@@ -134,18 +122,13 @@ function setNavVisible(visible) {
 
 // ---------- init ----------
 (async function init() {
-  try {
-    await loadAppConfig();
-  } catch (err) {
+  if (SUPABASE_URL.includes("YOUR-PROJECT") || SUPABASE_ANON_KEY.includes("YOUR-")) {
     $("#view-root").innerHTML = `
       <section class="center-wrap"><div class="card auth-card">
         <h1>Setup needed</h1>
-        <p class="muted">${escapeHtml(err.message)}</p>
-        <p class="muted" style="font-size:12px;">
-          In Cloudflare Pages → your project → Settings → Environment variables,
-          set <b>SUPABASE_URL</b>, <b>SUPABASE_ANON_KEY</b>, <b>BACKEND_URL</b>,
-          and optionally <b>EMAIL_DOMAINS</b>. Then redeploy.
-        </p>
+        <p class="muted">Open <b>frontend/app.js</b> and replace the hardcoded
+          <b>SUPABASE_URL</b>, <b>SUPABASE_ANON_KEY</b>, and <b>BACKEND_URL</b>
+          constants at the top of the file with your project's values.</p>
       </div></section>`;
     return;
   }
