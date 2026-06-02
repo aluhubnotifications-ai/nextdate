@@ -2134,3 +2134,53 @@ textarea { min-height: 88px; resize: vertical; }
     rgba(255, 255, 255, 0.65);
   box-shadow: 0 30px 70px rgba(190, 140, 170, 0.32), 0 0 0 1px rgba(255,255,255,0.5) inset;
 }
+
+/* ============================================================
+   DISCOVER — mobile tuning
+   ============================================================ */
+@media (max-width: 760px) {
+  .discover-shell {
+    max-width: 100%;
+    padding: 14px 14px 18px;
+    margin: 4px 0 16px;
+    gap: 12px;
+    border-radius: 24px;
+  }
+  .discover-title { font-size: 22px; }
+  .discover-sub   { font-size: 12px; }
+
+  .swipe-stack {
+    aspect-ratio: auto;
+    height: min(58dvh, 460px);
+    min-height: 360px;
+  }
+  .swipe-card { gap: 10px; }
+  .swipe-hero { padding: 14px; border-radius: 22px; }
+  .swipe-avatar-frame { border-radius: 20px; padding: 10px 16px; }
+  .swipe-avatar { font-size: 96px; }
+
+  .swipe-body { padding: 14px 16px 16px; border-radius: 18px; }
+  .swipe-name { font-size: 22px; }
+  .swipe-meta { font-size: 13.5px; }
+  .swipe-info { width: 28px; height: 28px; }
+  .swipe-info svg { width: 16px; height: 16px; }
+
+  .swipe-actions { gap: 20px; }
+  .swipe-btn         { width: 54px; height: 54px; }
+  .swipe-btn svg     { width: 22px; height: 22px; }
+  .swipe-btn.like    { width: 64px; height: 64px; }
+  .swipe-btn.like svg { width: 28px; height: 28px; }
+
+  .swipe-counter { font-size: 12px; }
+  .swipe-overlay { font-size: 18px; padding: 6px 12px; top: 18px; }
+}
+
+/* Smaller phones — squeeze a touch more. */
+@media (max-width: 380px) {
+  .discover-shell  { padding: 12px 10px 14px; border-radius: 20px; }
+  .swipe-avatar    { font-size: 84px; }
+  .swipe-name      { font-size: 20px; }
+  .swipe-actions   { gap: 16px; }
+  .swipe-btn       { width: 48px; height: 48px; }
+  .swipe-btn.like  { width: 58px; height: 58px; }
+}
