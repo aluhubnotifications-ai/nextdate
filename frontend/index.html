@@ -104,6 +104,71 @@
 
   <div id="toast" class="toast"></div>
 
+  <!-- Emoji modal -->
+  <div class="modal-backdrop hidden" id="emoji-modal" aria-hidden="true">
+    <div class="modal-card emoji-modal-card" role="dialog" aria-modal="true" aria-label="Pick an emoji">
+      <div class="modal-head">
+        <h3>Pick an emoji</h3>
+        <button class="icon-btn" id="emoji-modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="emoji-search" placeholder="Search emojis…" autocomplete="off" />
+      </div>
+      <div class="modal-body emoji-modal-body">
+        <div class="emoji-grid" id="emoji-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic confirm modal -->
+  <div class="modal-backdrop hidden" id="confirm-modal" aria-hidden="true">
+    <div class="modal-card confirm-modal-card" role="dialog" aria-modal="true">
+      <div class="confirm-body">
+        <div class="confirm-icon" id="confirm-icon">⚠️</div>
+        <h3 id="confirm-title">Are you sure?</h3>
+        <p class="muted" id="confirm-text"></p>
+      </div>
+      <div class="confirm-actions">
+        <button class="btn ghost" id="confirm-cancel">Cancel</button>
+        <button class="btn danger" id="confirm-ok">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report modal -->
+  <div class="modal-backdrop hidden" id="report-modal" aria-hidden="true">
+    <div class="modal-card report-modal-card" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h3>Report this conversation</h3>
+        <button class="icon-btn" id="report-modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted" style="margin: 0 0 14px;">Tell us what's wrong. Reports go to the community safety team and stay confidential.</p>
+        <div class="report-reasons" id="report-reasons">
+          <label class="report-reason"><input type="radio" name="reason" value="harassment" /><span>Harassment or threats</span></label>
+          <label class="report-reason"><input type="radio" name="reason" value="inappropriate" /><span>Inappropriate content</span></label>
+          <label class="report-reason"><input type="radio" name="reason" value="fake" /><span>Fake profile or impersonation</span></label>
+          <label class="report-reason"><input type="radio" name="reason" value="spam" /><span>Spam or scam</span></label>
+          <label class="report-reason"><input type="radio" name="reason" value="underage" /><span>Underage user</span></label>
+          <label class="report-reason"><input type="radio" name="reason" value="other" /><span>Other</span></label>
+        </div>
+        <div class="field" style="margin-top: 14px;">
+          <label>Add details (optional)</label>
+          <textarea id="report-details" placeholder="What happened? Anything our team should know."></textarea>
+        </div>
+      </div>
+      <div class="confirm-actions">
+        <button class="btn ghost" id="report-cancel">Cancel</button>
+        <button class="btn danger" id="report-submit">Submit report</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Templates -->
   <template id="tpl-auth">
     <section class="center-wrap">
@@ -258,7 +323,9 @@
               </div>
             </div>
             <div class="chat-header-actions">
-              <span class="muted" style="font-size:12px;" id="peer-session-id"></span>
+              <button class="icon-btn" id="info-btn" aria-label="Conversation info" title="Conversation info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></svg>
+              </button>
             </div>
           </div>
           <div id="reveal-banner" class="reveal-banner locked">
@@ -268,10 +335,6 @@
           <div id="identity-panel" class="identity-panel hidden"></div>
           <div id="chat-body" class="chat-body"></div>
           <div class="composer">
-            <div class="composer-emoji-panel hidden" id="emoji-panel">
-              <div class="emoji-panel-head">Emojis</div>
-              <div class="emoji-grid" id="emoji-grid"></div>
-            </div>
             <div class="composer-attachments hidden" id="composer-attachments"></div>
             <div class="composer-row">
               <div class="composer-actions">
@@ -291,6 +354,74 @@
           </div>
         </div>
       </section>
+
+      <aside class="chat-info-panel" id="chat-info-panel" aria-hidden="true">
+        <div class="info-head">
+          <h3>Chat info</h3>
+          <button class="icon-btn" id="info-close" aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="info-body">
+          <div class="info-profile">
+            <div class="avatar info-avatar" id="info-avatar"></div>
+            <div class="info-name" id="info-name"></div>
+            <div class="info-meta" id="info-meta"></div>
+            <div class="info-reveal" id="info-reveal"></div>
+          </div>
+
+          <div class="info-section">
+            <div class="info-section-label">Privacy</div>
+            <button class="info-action" data-act="mute">
+              <span class="info-action-icon">🔕</span>
+              <span class="info-action-text">
+                <span class="info-action-title" id="mute-title">Mute notifications</span>
+                <span class="info-action-sub">No alerts from this chat</span>
+              </span>
+            </button>
+          </div>
+
+          <div class="info-section">
+            <div class="info-section-label">Conversation</div>
+            <button class="info-action" data-act="clear">
+              <span class="info-action-icon">🧹</span>
+              <span class="info-action-text">
+                <span class="info-action-title">Clear chat</span>
+                <span class="info-action-sub">Remove all messages, keep the match</span>
+              </span>
+            </button>
+            <button class="info-action danger" data-act="delete">
+              <span class="info-action-icon">🗑️</span>
+              <span class="info-action-text">
+                <span class="info-action-title">Delete conversation</span>
+                <span class="info-action-sub">Permanently remove this chat</span>
+              </span>
+            </button>
+          </div>
+
+          <div class="info-section">
+            <div class="info-section-label">Safety</div>
+            <button class="info-action danger" data-act="block">
+              <span class="info-action-icon">🚫</span>
+              <span class="info-action-text">
+                <span class="info-action-title">Block user</span>
+                <span class="info-action-sub">They can't reach you again</span>
+              </span>
+            </button>
+            <button class="info-action danger" data-act="report">
+              <span class="info-action-icon">🚩</span>
+              <span class="info-action-text">
+                <span class="info-action-title">Report abuse</span>
+                <span class="info-action-sub">Send to community safety team</span>
+              </span>
+            </button>
+          </div>
+
+          <div class="info-footnote">
+            Reports are confidential. Blocking also clears this chat from your list.
+          </div>
+        </div>
+      </aside>
     </section>
   </template>
 
