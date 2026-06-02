@@ -1973,6 +1973,41 @@ textarea { min-height: 88px; resize: vertical; }
   font-weight: 600;
   letter-spacing: 0.2px;
 }
+
+.swipe-quote {
+  margin-top: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 138, 91, 0.10), rgba(139, 92, 246, 0.10));
+  border: 1px solid var(--border-soft);
+  color: var(--text);
+  font-size: 13.5px;
+  font-style: italic;
+  line-height: 1.45;
+  max-width: 360px;
+  width: 100%;
+  text-align: left;
+  transition: opacity .28s ease, transform .28s ease;
+}
+.swipe-quote.fading { opacity: 0; transform: translateY(4px); }
+.swipe-quote .quote-mark {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 28px;
+  line-height: 1;
+  font-style: normal;
+  background: var(--brand-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  flex-shrink: 0;
+  margin-top: -2px;
+}
+.swipe-quote .quote-text { display: inline-block; }
+
 .swipe-empty {
   position: absolute;
   inset: 0;
