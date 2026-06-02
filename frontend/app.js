@@ -380,6 +380,7 @@ function initTheme() {
 // ---------- init ----------
 (async function init() {
   initTheme();
+  wireGlobalModals();
 
   if (DEMO_MODE) {
     state.user            = { id: DEMO_ME.id, email: DEMO_ME.email };
@@ -693,11 +694,18 @@ async function renderChats(root) {
   $("#reveal-btn").onclick = approveReveal;
   $("#back-to-list")?.addEventListener("click", closeActiveChat);
   $("#chat-search-input")?.addEventListener("input", (e) => filterSessions(e.target.value));
-  $("#emoji-btn").onclick = toggleEmojiPanel;
+  $("#emoji-btn").onclick = openEmojiModal;
   $("#attach-btn").onclick = () => $("#file-input").click();
   $("#file-input").addEventListener("change", onFilesPicked);
-  document.addEventListener("click", closeEmojiOnOutside);
+
+  // Info panel
+  $("#info-btn")?.addEventListener("click", openInfoPanel);
+  $("#info-close")?.addEventListener("click", closeInfoPanel);
+  $$(".info-action").forEach((b) => b.addEventListener("click", () => onInfoAction(b.dataset.act)));
+
   state.pendingAttachments = [];
+  state.mutedSessions = state.mutedSessions || new Set();
+  state.blockedUsers = state.blockedUsers || new Set();
 }
 
 function autoGrowTextarea() {
@@ -707,7 +715,7 @@ function autoGrowTextarea() {
   ta.style.height = Math.min(180, ta.scrollHeight) + "px";
 }
 
-function buildEmojiPicker() {
+function buildEmojiPicker(filter = "") {
   const grid = $("#emoji-grid");
   if (!grid) return;
   grid.innerHTML = "";
@@ -716,35 +724,209 @@ function buildEmojiPicker() {
     b.type = "button";
     b.className = "emoji-cell";
     b.textContent = e;
-    b.onclick = (ev) => {
-      ev.stopPropagation();
+    b.onclick = () => {
       const ta = $("#msg-input");
       const start = ta.selectionStart, end = ta.selectionEnd;
       ta.value = ta.value.slice(0, start) + e + ta.value.slice(end);
       ta.focus();
       ta.selectionStart = ta.selectionEnd = start + e.length;
       autoGrowTextarea();
+      closeEmojiModal();
     };
     grid.appendChild(b);
   }
 }
 
-function toggleEmojiPanel(ev) {
-  ev?.stopPropagation();
-  const panel = $("#emoji-panel");
-  const btn = $("#emoji-btn");
-  if (!panel) return;
-  const isOpen = !panel.classList.contains("hidden");
-  panel.classList.toggle("hidden", isOpen);
-  btn?.classList.toggle("active", !isOpen);
+function openEmojiModal() {
+  const m = $("#emoji-modal");
+  if (!m) return;
+  m.classList.remove("hidden");
+  m.setAttribute("aria-hidden", "false");
+  $("#emoji-btn")?.classList.add("active");
+  $("#emoji-search")?.focus();
+}
+function closeEmojiModal() {
+  const m = $("#emoji-modal");
+  if (!m) return;
+  m.classList.add("hidden");
+  m.setAttribute("aria-hidden", "true");
+  $("#emoji-btn")?.classList.remove("active");
+  const s = $("#emoji-search");
+  if (s) s.value = "";
 }
 
-function closeEmojiOnOutside(ev) {
-  const panel = $("#emoji-panel");
-  if (!panel || panel.classList.contains("hidden")) return;
-  if (ev.target.closest("#emoji-panel") || ev.target.closest("#emoji-btn")) return;
-  panel.classList.add("hidden");
-  $("#emoji-btn")?.classList.remove("active");
+// ---------- modal wiring (run once at module load) ----------
+function wireGlobalModals() {
+  $("#emoji-modal-close")?.addEventListener("click", closeEmojiModal);
+  $("#emoji-modal")?.addEventListener("click", (e) => {
+    if (e.target.id === "emoji-modal") closeEmojiModal();
+  });
+  $("#emoji-search")?.addEventListener("input", (e) => {
+    const q = e.target.value.trim();
+    $$("#emoji-grid .emoji-cell").forEach((c) => {
+      c.style.display = !q || c.textContent.includes(q) ? "" : "none";
+    });
+  });
+  $("#confirm-cancel")?.addEventListener("click", closeConfirmModal);
+  $("#confirm-modal")?.addEventListener("click", (e) => {
+    if (e.target.id === "confirm-modal") closeConfirmModal();
+  });
+  $("#report-modal-close")?.addEventListener("click", closeReportModal);
+  $("#report-cancel")?.addEventListener("click", closeReportModal);
+  $("#report-modal")?.addEventListener("click", (e) => {
+    if (e.target.id === "report-modal") closeReportModal();
+  });
+  $("#report-submit")?.addEventListener("click", submitReport);
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    closeEmojiModal();
+    closeConfirmModal();
+    closeReportModal();
+    closeInfoPanel();
+  });
+}
+
+// ---------- confirm modal ----------
+function openConfirmModal({ title, text, icon = "⚠️", okLabel = "Confirm", okClass = "danger", onConfirm }) {
+  const m = $("#confirm-modal");
+  if (!m) return;
+  $("#confirm-title").textContent = title;
+  $("#confirm-text").textContent = text || "";
+  $("#confirm-icon").textContent = icon;
+  const ok = $("#confirm-ok");
+  ok.textContent = okLabel;
+  ok.className = `btn ${okClass}`;
+  ok.onclick = () => { closeConfirmModal(); onConfirm?.(); };
+  m.classList.remove("hidden");
+  m.setAttribute("aria-hidden", "false");
+}
+function closeConfirmModal() {
+  const m = $("#confirm-modal");
+  m?.classList.add("hidden");
+  m?.setAttribute("aria-hidden", "true");
+}
+
+// ---------- info panel ----------
+function openInfoPanel() {
+  const panel = $("#chat-info-panel");
+  if (!panel || !state.activeSession) return;
+  paintInfoPanel();
+  panel.classList.add("open");
+  panel.setAttribute("aria-hidden", "false");
+}
+function closeInfoPanel() {
+  const panel = $("#chat-info-panel");
+  panel?.classList.remove("open");
+  panel?.setAttribute("aria-hidden", "true");
+}
+
+function paintInfoPanel() {
+  const s = state.activeSession;
+  if (!s) return;
+  const peer = s.peer_profile || {};
+  $("#info-avatar").innerHTML = `${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span>`;
+  $("#info-name").textContent = peer.nickname || "Unknown";
+  $("#info-meta").textContent = [peer.gender, peer.zodiac_sign].filter(Boolean).join(" · ") || "—";
+  const revealed = s.user_a_approved_reveal && s.user_b_approved_reveal;
+  const reveal = $("#info-reveal");
+  reveal.className = "info-reveal " + (revealed ? "unlocked" : "locked");
+  reveal.textContent = revealed ? "✓ Identity revealed" : "🔒 Anonymous";
+  // Mute label
+  const muted = state.mutedSessions.has(s.id);
+  $("#mute-title").textContent = muted ? "Unmute notifications" : "Mute notifications";
+  document.querySelector('.info-action[data-act="mute"]')?.classList.toggle("active", muted);
+}
+
+function onInfoAction(act) {
+  const s = state.activeSession;
+  if (!s) return;
+  const peerName = s.peer_profile?.nickname || "this person";
+  switch (act) {
+    case "mute":
+      if (state.mutedSessions.has(s.id)) { state.mutedSessions.delete(s.id); toast("Notifications unmuted."); }
+      else { state.mutedSessions.add(s.id); toast(`Muted ${peerName}.`); }
+      paintInfoPanel();
+      break;
+    case "clear":
+      openConfirmModal({
+        title: "Clear this chat?",
+        text: "All messages between you two will be removed. The match itself stays.",
+        icon: "🧹",
+        okLabel: "Clear chat",
+        okClass: "warn",
+        onConfirm: () => {
+          if (DEMO_MODE) DEMO_MESSAGES[s.id] = [];
+          loadMessages(s.id);
+          toast("Chat cleared.");
+        },
+      });
+      break;
+    case "delete":
+      openConfirmModal({
+        title: "Delete this conversation?",
+        text: `This permanently removes your chat with ${peerName}. You can still rematch later.`,
+        icon: "🗑️",
+        okLabel: "Delete forever",
+        okClass: "danger",
+        onConfirm: () => {
+          if (DEMO_MODE) {
+            const i = DEMO_SESSIONS.findIndex((x) => x.id === s.id);
+            if (i >= 0) DEMO_SESSIONS.splice(i, 1);
+            delete DEMO_MESSAGES[s.id];
+          }
+          closeInfoPanel();
+          closeActiveChat();
+          loadSessions();
+          toast("Conversation deleted.");
+        },
+      });
+      break;
+    case "block":
+      openConfirmModal({
+        title: `Block ${peerName}?`,
+        text: "They won't be able to message or match with you again. This chat will be removed from your list.",
+        icon: "🚫",
+        okLabel: "Block",
+        okClass: "danger",
+        onConfirm: () => {
+          state.blockedUsers.add(s.peer_id);
+          if (DEMO_MODE) {
+            const i = DEMO_SESSIONS.findIndex((x) => x.id === s.id);
+            if (i >= 0) DEMO_SESSIONS.splice(i, 1);
+            delete DEMO_MESSAGES[s.id];
+          }
+          closeInfoPanel();
+          closeActiveChat();
+          loadSessions();
+          toast(`Blocked ${peerName}.`);
+        },
+      });
+      break;
+    case "report":
+      openReportModal();
+      break;
+  }
+}
+
+// ---------- report modal ----------
+function openReportModal() {
+  const m = $("#report-modal");
+  if (!m) return;
+  $("#report-details").value = "";
+  $$("#report-reasons input").forEach((r) => (r.checked = false));
+  m.classList.remove("hidden");
+  m.setAttribute("aria-hidden", "false");
+}
+function closeReportModal() {
+  const m = $("#report-modal");
+  m?.classList.add("hidden");
+  m?.setAttribute("aria-hidden", "true");
+}
+function submitReport() {
+  const reason = document.querySelector('#report-reasons input:checked')?.value;
+  if (!reason) { toast("Pick a reason first."); return; }
+  closeReportModal();
+  toast("Report sent. Our team will review within 24h.");
 }
 
 function onFilesPicked(ev) {
