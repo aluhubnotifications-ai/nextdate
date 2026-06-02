@@ -270,6 +270,7 @@ const state = {
   liked: new Set(),
   passed: new Set(),
   deck: null,
+  deckIndex: 0,
 };
 
 // In DEMO mode, treat these users as already-liking-you-back, so
@@ -619,16 +620,16 @@ function makeTagInput(container, initial) {
 // ---------- DISCOVER (swipe deck) ----------
 async function renderDiscover(root) {
   root.append($("#tpl-discover").content.cloneNode(true));
-  $("#refresh-discover").onclick = () => { state.deck = null; loadDiscover(); };
-  $("#btn-swipe-left").onclick  = () => triggerSwipe("pass");
-  $("#btn-swipe-right").onclick = () => triggerSwipe("like");
+  $("#refresh-discover").onclick = () => { state.deck = null; state.deckIndex = 0; loadDiscover(); };
+  $("#btn-swipe-back").onclick = () => triggerNav("back");
+  $("#btn-swipe-next").onclick = () => triggerNav("next");
   await loadDiscover();
 }
 
-function triggerSwipe(choice) {
+function triggerNav(dir) {
   const front = document.querySelector(".swipe-card.front");
-  if (front) flyAndDecide(front, choice);
-  else decide(choice);
+  if (front) flyAndCycle(front, dir);
+  else cycle(dir);
 }
 
 function existingSessionPartners() {
@@ -658,11 +659,8 @@ async function loadDiscover() {
 
   if (state.deck === null) {
     const skip = DEMO_MODE ? existingSessionPartners() : new Set();
-    state.deck = suggestions.filter(
-      (s) => !state.liked.has(s.user_id)
-          && !state.passed.has(s.user_id)
-          && !skip.has(s.user_id),
-    );
+    state.deck = suggestions.filter((s) => !skip.has(s.user_id));
+    state.deckIndex = 0;
   }
 
   renderDeck();
@@ -671,40 +669,38 @@ async function loadDiscover() {
 function renderDeck() {
   const stack = $("#swipe-stack");
   const counter = $("#swipe-counter");
-  const hint = $("#swipe-controls");
+  const controls = $("#swipe-controls");
   if (!stack) return;
   stack.innerHTML = "";
 
-  const remaining = state.deck?.length || 0;
-  counter.textContent = remaining === 1
-    ? "1 profile remaining"
-    : `${remaining} profiles remaining`;
-
-  if (!remaining) {
+  const total = state.deck?.length || 0;
+  if (!total) {
+    counter.textContent = "0 of 0";
     stack.innerHTML = `
       <div class="swipe-empty">
         <div class="swipe-empty-emoji">🌙</div>
-        <h3>You're all caught up</h3>
-        <p>Come back later for fresh picks, or tap reshuffle to revisit the deck.</p>
-        <button class="btn" id="reshuffle-deck">Reshuffle</button>
+        <h3>No profiles yet</h3>
+        <p>Check back soon — fresh picks land regularly.</p>
       </div>`;
-    if (hint) hint.style.visibility = "hidden";
-    $("#reshuffle-deck")?.addEventListener("click", () => {
-      state.liked.clear();
-      state.passed.clear();
-      state.deck = null;
-      loadDiscover();
-    });
+    if (controls) controls.style.visibility = "hidden";
     return;
   }
 
-  if (hint) hint.style.visibility = "visible";
+  if (controls) controls.style.visibility = "visible";
 
-  // Render up to the top 2 cards (front + ghost behind)
-  const visible = state.deck.slice(0, 2).reverse();
-  for (const [idx, user] of visible.entries()) {
-    const isFront = idx === visible.length - 1;
-    stack.appendChild(buildSwipeCard(user, isFront));
+  // Normalize index in case it drifted out of bounds.
+  state.deckIndex = ((state.deckIndex % total) + total) % total;
+  counter.textContent = `${state.deckIndex + 1} of ${total}`;
+
+  // Render the next card (behind) and the current one (front) so the
+  // deck looks like a stack and the "next" peeks through.
+  const nextIdx = (state.deckIndex + 1) % total;
+  const layers = [
+    { user: state.deck[nextIdx],         front: false },
+    { user: state.deck[state.deckIndex], front: true  },
+  ];
+  for (const { user, front } of layers) {
+    stack.appendChild(buildSwipeCard(user, front));
   }
 }
 
@@ -738,7 +734,7 @@ function buildSwipeCard(user, isFront) {
       </div>
     </div>
     <div class="swipe-overlay like-overlay">LIKE</div>
-    <div class="swipe-overlay pass-overlay">PASS</div>
+    <div class="swipe-overlay pass-overlay">NEXT</div>
   `;
 
   const infoBtn = card.querySelector(".swipe-info");
@@ -755,7 +751,7 @@ function buildSwipeCard(user, isFront) {
   likeFab.addEventListener("click", (e) => {
     e.stopPropagation();
     if (!isFront) return;
-    flyAndDecide(card, "like");
+    likeCurrent(card);
   });
 
   if (isFront) attachSwipe(card);
@@ -789,8 +785,8 @@ function attachSwipe(card) {
     dragging = false;
     card.releasePointerCapture?.(pointerId);
     card.classList.remove("dragging");
-    if (dx > threshold)      return flyAndDecide(card, "like");
-    if (dx < -threshold)     return flyAndDecide(card, "pass");
+    if (dx > threshold)      return likeCurrent(card);
+    if (dx < -threshold)     return flyAndCycle(card, "next");
     card.style.transform = "";
     card.querySelector(".like-overlay").style.opacity = 0;
     card.querySelector(".pass-overlay").style.opacity = 0;
@@ -802,23 +798,45 @@ function attachSwipe(card) {
   card.addEventListener("pointercancel", onUp);
 }
 
-function flyAndDecide(card, choice) {
-  const dir = choice === "like" ? 1 : -1;
+function flyAndCycle(card, dir) {
+  const sign = dir === "next" ? 1 : -1;
   card.style.transition = "transform .28s ease, opacity .28s ease";
-  card.style.transform = `translate(${dir * 600}px, 80px) rotate(${dir * 24}deg)`;
+  card.style.transform = `translate(${sign * 600}px, 80px) rotate(${sign * 24}deg)`;
   card.style.opacity = "0";
-  setTimeout(() => decide(choice), 240);
+  setTimeout(() => cycle(dir), 240);
 }
 
-function decide(choice) {
-  if (!state.deck?.length) return;
-  const user = state.deck.shift();
-  if (choice === "like") {
-    state.liked.add(user.user_id);
-    if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
+function cycle(dir) {
+  const total = state.deck?.length || 0;
+  if (!total) return;
+  if (dir === "next") {
+    state.deckIndex = (state.deckIndex + 1) % total;
+    state.passed.add(state.deck[state.deckIndex - 1 < 0 ? total - 1 : state.deckIndex - 1].user_id);
   } else {
-    state.passed.add(user.user_id);
+    state.deckIndex = (state.deckIndex - 1 + total) % total;
   }
+  renderDeck();
+}
+
+function likeCurrent(card) {
+  const user = state.deck?.[state.deckIndex];
+  if (!user) return;
+  state.liked.add(user.user_id);
+  if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
+  if (card) {
+    card.style.transition = "transform .28s ease, opacity .28s ease";
+    card.style.transform = "translate(600px, 80px) rotate(24deg)";
+    card.style.opacity = "0";
+    setTimeout(() => { advance(); }, 240);
+  } else {
+    advance();
+  }
+}
+
+function advance() {
+  const total = state.deck?.length || 0;
+  if (!total) return;
+  state.deckIndex = (state.deckIndex + 1) % total;
   renderDeck();
 }
 
