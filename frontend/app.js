@@ -294,11 +294,13 @@ const views = {
 
 async function navigate(name) {
   cleanupRealtime();
-  stopQuoteRotator();
   const root = $("#view-root");
   root.innerHTML = "";
   // Chat view should fill the entire panel; other views get padded scroll area
   root.classList.toggle("flush", name === "chats");
+  // Tag the view root with the active view name so each section can
+  // own its background, accent color, and ambient glow.
+  root.dataset.section = name;
   root.classList.toggle("discover", name === "discover");
   document.querySelectorAll("[data-view]").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === name),
@@ -622,54 +624,12 @@ function makeTagInput(container, initial) {
 }
 
 // ---------- DISCOVER (swipe deck) ----------
-const DISCOVER_QUOTES = [
-  "Be kind first, clever second.",
-  "Identity stays yours until you both choose to share it.",
-  "Real conversations beat perfect openers.",
-  "Curiosity is the most attractive trait you can show.",
-  "Slow down. The right person is worth the wait.",
-  "You don't have to perform — just be present.",
-  "Vulnerability is how strangers become close.",
-  "Compatibility is built, not just found.",
-  "A great match starts with a great question.",
-  "Listen twice as much as you speak.",
-  "Anonymous on the outside, honest on the inside.",
-  "The best stories begin with a hello.",
-  "Pick the conversation that actually makes you think.",
-  "Boundaries are how love stays soft.",
-  "If it feels easy, that's a good sign.",
-  "Mutual reveal is a promise — handle it gently.",
-];
-
 async function renderDiscover(root) {
   root.append($("#tpl-discover").content.cloneNode(true));
   $("#refresh-discover").onclick = () => { state.deck = null; state.deckIndex = 0; loadDiscover(); };
   $("#btn-pass").onclick = () => triggerAction("pass");
   $("#btn-like").onclick = () => triggerAction("like");
-  startQuoteRotator();
   await loadDiscover();
-}
-
-function startQuoteRotator() {
-  stopQuoteRotator();
-  const text = $("#swipe-quote-text");
-  const card = $("#swipe-quote");
-  if (!text || !card) return;
-  let i = Math.floor(Math.random() * DISCOVER_QUOTES.length);
-  text.textContent = DISCOVER_QUOTES[i];
-  state.quoteTimer = setInterval(() => {
-    if (!document.body.contains(card)) { stopQuoteRotator(); return; }
-    card.classList.add("fading");
-    setTimeout(() => {
-      i = (i + 1) % DISCOVER_QUOTES.length;
-      text.textContent = DISCOVER_QUOTES[i];
-      card.classList.remove("fading");
-    }, 280);
-  }, 6000);
-}
-
-function stopQuoteRotator() {
-  if (state.quoteTimer) { clearInterval(state.quoteTimer); state.quoteTimer = null; }
 }
 
 function triggerAction(choice) {
