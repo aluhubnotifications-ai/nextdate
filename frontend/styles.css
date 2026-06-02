@@ -5,16 +5,18 @@
    ======================================================================== */
 
 :root {
-  /* Surfaces */
-  --bg-deep:      #100A1F;
-  --bg-surface:   #1A1230;
-  --bg-elevated:  #221A3A;
-  --bg-input:     #140C26;
+  /* Surfaces — warm plum, never pure black */
+  --bg-deep:      #271A3D;          /* base canvas (warm plum) */
+  --bg-deep-2:    #361E4A;          /* mid */
+  --bg-deep-3:    #4A1F4F;          /* low — sunset wine */
+  --bg-surface:   #2B1E45;          /* card */
+  --bg-elevated:  #382955;          /* hover/active surface */
+  --bg-input:     #1F1535;          /* slightly recessed input */
 
   /* Lines */
-  --border:       #2E2545;
-  --border-soft:  #3A2F55;
-  --border-hi:    #4A3D6E;
+  --border:       #4A3A6E;
+  --border-soft:  #57467F;
+  --border-hi:    #6D5996;
 
   /* Text */
   --text:         #F5F0FF;
@@ -55,10 +57,12 @@ html, body {
   width: 100%;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  background-color: var(--bg-deep);
+  background:
+    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-deep-2) 55%, var(--bg-deep-3) 100%);
+  background-attachment: fixed;
 }
 
-/* Ambient dusk glow — coral top-right, violet bottom-left */
+/* Ambient dusk glow — coral, rose and violet blooms layered over the canvas */
 body::before {
   content: "";
   position: fixed;
@@ -66,9 +70,11 @@ body::before {
   pointer-events: none;
   z-index: -1;
   background-image:
-    radial-gradient(1200px 720px at 88% -8%, rgba(255, 138, 91, 0.16) 0%, transparent 55%),
-    radial-gradient(1100px 760px at 8% 108%, rgba(139, 92, 246, 0.18) 0%, transparent 60%),
-    radial-gradient(900px 600px at 50% 50%, rgba(255, 61, 110, 0.06) 0%, transparent 70%);
+    radial-gradient(1200px 720px at 88% -6%, rgba(255, 138, 91, 0.28) 0%, transparent 55%),
+    radial-gradient(900px  640px at 10% 12%, rgba(255, 61, 110, 0.20) 0%, transparent 60%),
+    radial-gradient(1100px 760px at 8% 108%, rgba(139, 92, 246, 0.28) 0%, transparent 60%),
+    radial-gradient(900px  600px at 95% 95%, rgba(255, 138, 91, 0.18) 0%, transparent 60%),
+    radial-gradient(700px  500px at 50% 50%, rgba(255, 61, 110, 0.10) 0%, transparent 70%);
 }
 
 a { color: var(--brand-rose); text-decoration: none; font-weight: 600; }
@@ -94,12 +100,12 @@ a:hover { color: var(--brand-coral); text-decoration: underline; }
   justify-content: space-between;
   padding: 12px 18px;
   margin-bottom: 24px;
-  background: rgba(26, 18, 48, 0.78);
+  background: rgba(43, 30, 69, 0.65);
   backdrop-filter: blur(22px) saturate(160%);
   -webkit-backdrop-filter: blur(22px) saturate(160%);
   border: 1px solid var(--border);
   border-radius: 18px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 12px 36px rgba(20, 8, 40, 0.45);
 }
 
 /* ───── Brand / Logo ───── */
@@ -160,11 +166,17 @@ a:hover { color: var(--brand-coral); text-decoration: underline; }
 
 /* ───── Cards ───── */
 .card {
-  background: var(--bg-surface);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)) ,
+    rgba(43, 30, 69, 0.72);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 26px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 12px 36px rgba(20, 8, 40, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .center-wrap {
@@ -293,7 +305,11 @@ textarea { min-height: 88px; resize: vertical; }
   gap: 16px;
 }
 .profile-card {
-  background: var(--bg-surface);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)) ,
+    rgba(43, 30, 69, 0.78);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 20px;
@@ -388,14 +404,16 @@ textarea { min-height: 88px; resize: vertical; }
   display: flex; flex-direction: column;
   padding: 0;
   overflow: hidden;
-  background: var(--bg-surface);
+  background: rgba(43, 30, 69, 0.78);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   height: 100%;
 }
 .chat-header {
   padding: 14px 20px;
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
-  background: var(--bg-surface);
+  background: linear-gradient(180deg, rgba(255, 138, 91, 0.06), transparent);
   flex-shrink: 0;
 }
 .chat-header .avatar {
@@ -410,7 +428,10 @@ textarea { min-height: 88px; resize: vertical; }
   padding: 22px 20px;
   display: flex; flex-direction: column;
   gap: 4px;
-  background: var(--bg-deep);
+  background:
+    radial-gradient(600px 400px at 20% 0%, rgba(255, 138, 91, 0.10), transparent 60%),
+    radial-gradient(600px 500px at 100% 100%, rgba(139, 92, 246, 0.14), transparent 60%),
+    rgba(31, 21, 53, 0.6);
 }
 
 /* Bubbles */
@@ -446,7 +467,7 @@ textarea { min-height: 88px; resize: vertical; }
   display: flex; gap: 10px;
   padding: 14px 16px 16px;
   border-top: 1px solid var(--border);
-  background: var(--bg-surface);
+  background: linear-gradient(0deg, rgba(139, 92, 246, 0.07), transparent);
   flex-shrink: 0;
 }
 .chat-input input {
@@ -491,7 +512,7 @@ textarea { min-height: 88px; resize: vertical; }
 .identity-panel {
   padding: 16px 20px;
   border-top: 1px dashed var(--border);
-  background: var(--bg-elevated);
+  background: linear-gradient(180deg, rgba(255, 138, 91, 0.08), rgba(139, 92, 246, 0.08));
 }
 .identity-row {
   display: flex; gap: 12px; margin: 6px 0;
