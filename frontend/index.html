@@ -48,6 +48,11 @@
           <span class="nav-label">Messages</span>
           <span class="nav-badge hidden" id="nav-chats-badge">0</span>
         </button>
+        <button data-view="matches" class="hidden" title="Matches">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7-4.35-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.65-7 10-7 10z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
+          <span class="nav-label">Matches</span>
+          <span class="nav-badge hidden" id="nav-matches-badge">0</span>
+        </button>
         <button data-view="notifications" class="hidden" title="Notifications">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
           <span class="nav-label">Notifications</span>
@@ -99,6 +104,26 @@
         </div>
       </div>
       <main id="view-root"></main>
+      <nav class="bottom-tabs hidden" id="bottom-tabs" aria-label="Primary">
+        <button data-view="discover" class="bottom-tab" title="Discover">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <span>Discover</span>
+        </button>
+        <button data-view="chats" class="bottom-tab" title="Messages">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="bt-badge hidden" id="bt-chats-badge">0</span>
+          <span>Messages</span>
+        </button>
+        <button data-view="matches" class="bottom-tab" title="Matches">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-4.35-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.65-7 10-7 10z"/></svg>
+          <span class="bt-badge hidden" id="bt-matches-badge">0</span>
+          <span>Matches</span>
+        </button>
+        <button data-view="profile" class="bottom-tab" title="Profile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Profile</span>
+        </button>
+      </nav>
     </div>
   </div>
 
@@ -280,15 +305,38 @@
   </template>
 
   <template id="tpl-discover">
+    <section class="discover-shell">
+      <div class="discover-header">
+        <div>
+          <h2 class="discover-title">Discover</h2>
+          <div class="discover-sub">Find your match</div>
+        </div>
+        <button class="btn ghost sm" id="refresh-discover" title="Reshuffle the deck">↻</button>
+      </div>
+      <div class="swipe-stage">
+        <div class="swipe-stack" id="swipe-stack" aria-live="polite"></div>
+        <div class="swipe-actions" id="swipe-actions">
+          <button class="swipe-btn pass" id="btn-pass" aria-label="Pass">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+          <button class="swipe-btn like" id="btn-like" aria-label="Like">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7-4.35-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.65-7 10-7 10z"/></svg>
+          </button>
+        </div>
+        <div class="swipe-counter" id="swipe-counter">0 profiles remaining</div>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-matches">
     <section>
       <div class="view-header">
         <div>
-          <h2>✨ Picked for you today</h2>
-          <div class="muted">AI-curated by your intent &amp; vibe. Identities stay private until you both reveal.</div>
+          <h2>💖 Matches</h2>
+          <div class="muted">People you both liked. Tap to chat — identities stay private until you both reveal.</div>
         </div>
-        <button class="btn ghost" id="refresh-discover">↻ Refresh</button>
       </div>
-      <div id="discover-grid" class="grid"></div>
+      <div id="matches-grid" class="matches-grid"></div>
     </section>
   </template>
 

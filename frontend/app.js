@@ -267,7 +267,16 @@ const state = {
   messagesChannel: null,
   sessionChannel: null,
   notifications: DEMO_NOTIFICATIONS.slice(),
+  liked: new Set(),
+  passed: new Set(),
+  deck: null,
 };
+
+// In DEMO mode, treat these users as already-liking-you-back, so
+// pressing ♥ on them yields an instant mutual match.
+const DEMO_MUTUAL_FANS = new Set([
+  "u-aisha", "u-thandi", "u-nia", "u-zara", "u-sade",
+]);
 
 // ---------- routing ----------
 const views = {
@@ -275,6 +284,7 @@ const views = {
   onboarding: renderOnboarding,
   discover: renderDiscover,
   chats: renderChats,
+  matches: renderMatches,
   notifications: renderNotifications,
   profile: renderProfile,
   logout: doLogout,
@@ -286,14 +296,15 @@ async function navigate(name) {
   root.innerHTML = "";
   // Chat view should fill the entire panel; other views get padded scroll area
   root.classList.toggle("flush", name === "chats");
-  document.querySelectorAll(".nav button[data-view]").forEach((b) =>
+  root.classList.toggle("discover", name === "discover");
+  document.querySelectorAll("[data-view]").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === name),
   );
   closeDrawer();
   await views[name](root);
 }
 
-document.querySelectorAll(".nav button[data-view]").forEach((b) =>
+document.querySelectorAll("[data-view]").forEach((b) =>
   b.addEventListener("click", () => navigate(b.dataset.view)),
 );
 
@@ -301,6 +312,8 @@ function setNavVisible(visible) {
   document.querySelectorAll(".nav button[data-view]").forEach((b) =>
     b.classList.toggle("hidden", !visible),
   );
+  const tabs = document.getElementById("bottom-tabs");
+  if (tabs) tabs.classList.toggle("hidden", !visible);
   refreshBadges();
 }
 
@@ -317,24 +330,32 @@ function unreadChatCount() {
   return ids.size;
 }
 
+function matchCount() {
+  if (DEMO_MODE) return DEMO_SESSIONS.length;
+  return 0;
+}
+
+function setBadge(id, n, capped = true) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const label = n > 9 && capped ? "9+" : (n > 99 ? "99+" : String(n));
+  el.textContent = label;
+  el.classList.toggle("hidden", n === 0);
+}
+
 function refreshBadges() {
-  const notifBadge = document.getElementById("nav-notif-badge");
-  if (notifBadge) {
-    const n = unreadCount();
-    notifBadge.textContent = n > 99 ? "99+" : String(n);
-    notifBadge.classList.toggle("hidden", n === 0);
-  }
-  const chatBadge = document.getElementById("nav-chats-badge");
-  if (chatBadge) {
-    const n = unreadChatCount();
-    chatBadge.textContent = n > 99 ? "99+" : String(n);
-    chatBadge.classList.toggle("hidden", n === 0);
-  }
+  const notif  = unreadCount();
+  const chats  = unreadChatCount();
+  const mutes  = matchCount();
+  setBadge("nav-notif-badge",   notif, false);
+  setBadge("nav-chats-badge",   chats, false);
+  setBadge("nav-matches-badge", mutes, false);
+  setBadge("bt-chats-badge",    chats, true);
+  setBadge("bt-matches-badge",  mutes, true);
   const dot = document.getElementById("mobile-notif-dot");
   if (dot) {
-    const n = unreadCount();
-    dot.textContent = n > 99 ? "99+" : String(n);
-    dot.classList.toggle("hidden", n === 0);
+    dot.textContent = notif > 99 ? "99+" : String(notif);
+    dot.classList.toggle("hidden", notif === 0);
   }
 }
 const refreshNotifBadge = refreshBadges;
@@ -595,16 +616,26 @@ function makeTagInput(container, initial) {
   return { values: () => [...tags] };
 }
 
-// ---------- DISCOVER ----------
+// ---------- DISCOVER (swipe deck) ----------
 async function renderDiscover(root) {
   root.append($("#tpl-discover").content.cloneNode(true));
-  $("#refresh-discover").onclick = loadDiscover;
+  $("#refresh-discover").onclick = () => { state.deck = null; loadDiscover(); };
+  $("#btn-pass").onclick = () => decide("pass");
+  $("#btn-like").onclick = () => decide("like");
   await loadDiscover();
 }
 
+function existingSessionPartners() {
+  const me = state.user?.id || DEMO_ME.id;
+  return new Set(
+    DEMO_SESSIONS.map((s) => (s.user_a === me ? s.user_b : s.user_a)),
+  );
+}
+
 async function loadDiscover() {
-  const grid = $("#discover-grid");
-  grid.innerHTML = `<div class="empty">Finding compatible people…</div>`;
+  const stack = $("#swipe-stack");
+  const counter = $("#swipe-counter");
+  stack.innerHTML = `<div class="swipe-empty">Finding compatible people…</div>`;
 
   let suggestions = [];
   if (DEMO_MODE) {
@@ -613,60 +644,243 @@ async function loadDiscover() {
     try {
       suggestions = await api(`/suggestions/${state.user.id}`);
     } catch (err) {
-      grid.innerHTML = `<div class="empty">Couldn't reach the matching engine.<br/><span class="muted">${err.message}</span></div>`;
+      stack.innerHTML = `<div class="swipe-empty">Couldn't reach the matching engine.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
+      counter.textContent = "";
       return;
     }
   }
 
-  if (!suggestions.length) {
-    grid.innerHTML = `<div class="empty">No matches yet. Tweak your preferences or check back soon.</div>`;
+  if (state.deck === null) {
+    const skip = DEMO_MODE ? existingSessionPartners() : new Set();
+    state.deck = suggestions.filter(
+      (s) => !state.liked.has(s.user_id)
+          && !state.passed.has(s.user_id)
+          && !skip.has(s.user_id),
+    );
+  }
+
+  renderDeck();
+}
+
+function renderDeck() {
+  const stack = $("#swipe-stack");
+  const counter = $("#swipe-counter");
+  const actions = $("#swipe-actions");
+  if (!stack) return;
+  stack.innerHTML = "";
+
+  const remaining = state.deck?.length || 0;
+  counter.textContent = remaining === 1
+    ? "1 profile remaining"
+    : `${remaining} profiles remaining`;
+
+  if (!remaining) {
+    stack.innerHTML = `
+      <div class="swipe-empty">
+        <div class="swipe-empty-emoji">🌙</div>
+        <h3>You're all caught up</h3>
+        <p>Come back later for fresh picks, or tap reshuffle to revisit the deck.</p>
+        <button class="btn" id="reshuffle-deck">Reshuffle</button>
+      </div>`;
+    actions.style.visibility = "hidden";
+    $("#reshuffle-deck")?.addEventListener("click", () => {
+      state.liked.clear();
+      state.passed.clear();
+      state.deck = null;
+      loadDiscover();
+    });
     return;
   }
 
-  grid.innerHTML = "";
-  for (const s of suggestions) {
-    const card = document.createElement("div");
-    card.className = "profile-card";
-    const meta = [s.gender, s.zodiac_sign].filter(Boolean).map(escapeHtml).join(" · ");
-    card.innerHTML = `
-      <div style="display:flex; align-items:flex-start; gap:14px;">
-        <div class="avatar">${escapeHtml(s.avatar_url || "🦊")}</div>
-        <div style="flex:1; min-width:0;">
-          <div style="font-weight:800; font-size:17px; color:var(--text); letter-spacing:-0.2px;">${escapeHtml(s.nickname)}</div>
-          <div class="muted" style="font-size:12.5px; margin-top:3px; font-weight:500;">${meta || "—"}</div>
-        </div>
+  actions.style.visibility = "visible";
+
+  // Render up to the top 2 cards (front + ghost behind)
+  const visible = state.deck.slice(0, 2).reverse();
+  for (const [idx, user] of visible.entries()) {
+    const isFront = idx === visible.length - 1;
+    stack.appendChild(buildSwipeCard(user, isFront));
+  }
+}
+
+function buildSwipeCard(user, isFront) {
+  const card = document.createElement("article");
+  card.className = "swipe-card" + (isFront ? " front" : " behind");
+  card.dataset.uid = user.user_id;
+
+  const meta = [user.gender, user.zodiac_sign].filter(Boolean).map(escapeHtml).join(" • ");
+  const interests = (user.interests || []).slice(0, 4).map(escapeHtml);
+  const hasInterests = interests.length > 0;
+
+  card.innerHTML = `
+    <div class="swipe-hero">
+      <div class="swipe-avatar">${escapeHtml(user.avatar_url || "🦊")}</div>
+    </div>
+    <div class="swipe-body">
+      <div class="swipe-name-row">
+        <div class="swipe-name">${escapeHtml(user.nickname)}</div>
+        <button class="swipe-info" type="button" aria-label="More info" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </button>
       </div>
-      <div style="display:flex; align-items:center; gap:6px;">
-        <span class="chip">✨ <span class="score">${s.score ?? 0}% match</span></span>
+      <div class="swipe-meta">${meta || "—"}</div>
+      <div class="swipe-details" hidden>
+        ${hasInterests ? `<div class="swipe-detail-row"><span class="swipe-detail-label">Into</span><div class="swipe-chips">${interests.map((i) => `<span class="swipe-chip">${i}</span>`).join("")}</div></div>` : ""}
+        ${user.score != null ? `<div class="swipe-detail-row"><span class="swipe-detail-label">Vibe match</span><span class="swipe-score">${user.score}%</span></div>` : ""}
       </div>
-      <button class="btn full" data-uid="${s.user_id}">Say hi 👋</button>
-    `;
-    card.querySelector("button").onclick = async () => {
-      if (DEMO_MODE) {
-        let sess = DEMO_SESSIONS.find(
-          (x) => (x.user_a === s.user_id && x.user_b === DEMO_ME.id) ||
-                 (x.user_b === s.user_id && x.user_a === DEMO_ME.id),
-        );
-        if (!sess) {
-          sess = {
-            id: `s-${s.user_id}-${Date.now()}`,
-            user_a: DEMO_ME.id, user_b: s.user_id,
-            user_a_approved_reveal: false, user_b_approved_reveal: false,
-            created_at: new Date().toISOString(),
-          };
-          DEMO_SESSIONS.unshift(sess);
-          DEMO_MESSAGES[sess.id] = [];
-        }
-        await navigate("chats");
-        await openSession(sess.id);
-        return;
-      }
-      const { data, error } = await supabase.rpc("open_chat_session", { other: s.user_id });
-      if (error) return toast(error.message);
-      await navigate("chats");
-      await openSession(data);
+    </div>
+    <div class="swipe-overlay like-overlay">LIKE</div>
+    <div class="swipe-overlay pass-overlay">PASS</div>
+  `;
+
+  const infoBtn = card.querySelector(".swipe-info");
+  const details = card.querySelector(".swipe-details");
+  infoBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = details.hasAttribute("hidden");
+    if (open) details.removeAttribute("hidden"); else details.setAttribute("hidden", "");
+    infoBtn.setAttribute("aria-expanded", String(open));
+  });
+
+  if (isFront) attachSwipe(card);
+  return card;
+}
+
+function attachSwipe(card) {
+  let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false, pointerId = null;
+  const threshold = 110;
+
+  const onDown = (e) => {
+    if (e.target.closest(".swipe-info")) return;
+    dragging = true;
+    pointerId = e.pointerId;
+    startX = e.clientX; startY = e.clientY; dx = 0; dy = 0;
+    card.setPointerCapture?.(pointerId);
+    card.classList.add("dragging");
+  };
+  const onMove = (e) => {
+    if (!dragging) return;
+    dx = e.clientX - startX;
+    dy = e.clientY - startY;
+    const rot = dx / 18;
+    card.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+    const intent = dx / threshold;
+    card.querySelector(".like-overlay").style.opacity = Math.max(0, Math.min(1, intent));
+    card.querySelector(".pass-overlay").style.opacity = Math.max(0, Math.min(1, -intent));
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    card.releasePointerCapture?.(pointerId);
+    card.classList.remove("dragging");
+    if (dx > threshold)      return flyAndDecide(card, "like");
+    if (dx < -threshold)     return flyAndDecide(card, "pass");
+    card.style.transform = "";
+    card.querySelector(".like-overlay").style.opacity = 0;
+    card.querySelector(".pass-overlay").style.opacity = 0;
+  };
+
+  card.addEventListener("pointerdown", onDown);
+  card.addEventListener("pointermove", onMove);
+  card.addEventListener("pointerup", onUp);
+  card.addEventListener("pointercancel", onUp);
+}
+
+function flyAndDecide(card, choice) {
+  const dir = choice === "like" ? 1 : -1;
+  card.style.transition = "transform .28s ease, opacity .28s ease";
+  card.style.transform = `translate(${dir * 600}px, 80px) rotate(${dir * 24}deg)`;
+  card.style.opacity = "0";
+  setTimeout(() => decide(choice), 240);
+}
+
+function decide(choice) {
+  if (!state.deck?.length) return;
+  const user = state.deck.shift();
+  if (choice === "like") {
+    state.liked.add(user.user_id);
+    if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
+  } else {
+    state.passed.add(user.user_id);
+  }
+  renderDeck();
+}
+
+function handleMutualMatch(user) {
+  const me = state.user?.id || DEMO_ME.id;
+  let sess = DEMO_SESSIONS.find(
+    (x) => (x.user_a === user.user_id && x.user_b === me) ||
+           (x.user_b === user.user_id && x.user_a === me),
+  );
+  if (!sess) {
+    sess = {
+      id: `s-${user.user_id}-${Date.now()}`,
+      user_a: me, user_b: user.user_id,
+      user_a_approved_reveal: false, user_b_approved_reveal: false,
+      created_at: new Date().toISOString(),
     };
-    grid.appendChild(card);
+    DEMO_SESSIONS.unshift(sess);
+    DEMO_MESSAGES[sess.id] = [];
+  }
+  state.notifications.unshift({
+    id: `n-${Date.now()}`,
+    icon: "💖", kind: "match",
+    title: `It's a match — ${user.nickname}`,
+    text: `You both liked each other. Say hi when you're ready.`,
+    time: "just now", group: "today", unread: true,
+    session_id: sess.id,
+  });
+  refreshBadges();
+  toast(`💖 It's a match with ${user.nickname}!`);
+}
+
+// ---------- MATCHES ----------
+async function renderMatches(root) {
+  root.append($("#tpl-matches").content.cloneNode(true));
+  const grid = $("#matches-grid");
+  const me = state.user?.id || DEMO_ME.id;
+  let sessions = [];
+  if (DEMO_MODE) {
+    sessions = DEMO_SESSIONS.slice();
+  } else {
+    try {
+      const { data, error } = await supabase
+        .from("chat_sessions")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      sessions = data || [];
+    } catch (err) {
+      grid.innerHTML = `<div class="empty">Couldn't load matches.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
+      return;
+    }
+  }
+  if (!sessions.length) {
+    grid.innerHTML = `
+      <div class="matches-empty">
+        <div class="matches-empty-emoji">💞</div>
+        <h3>No matches yet</h3>
+        <p>Tap ♥ on profiles in Discover. When they like you back, they'll show up here.</p>
+        <button class="btn" id="go-discover">Find people</button>
+      </div>`;
+    $("#go-discover")?.addEventListener("click", () => navigate("discover"));
+    return;
+  }
+  grid.innerHTML = "";
+  for (const s of sessions) {
+    const otherId = s.user_a === me ? s.user_b : s.user_a;
+    const peer = demoPeer(otherId);
+    const tile = document.createElement("button");
+    tile.className = "match-tile";
+    tile.innerHTML = `
+      <div class="match-avatar">${escapeHtml(peer.avatar_url || "🦊")}</div>
+      <div class="match-name">${escapeHtml(peer.nickname || "Unknown")}</div>
+      <div class="match-meta">${[peer.gender, peer.zodiac_sign].filter(Boolean).map(escapeHtml).join(" • ") || "—"}</div>
+    `;
+    tile.onclick = async () => {
+      await navigate("chats");
+      await openSession(s.id);
+    };
+    grid.appendChild(tile);
   }
 }
 
