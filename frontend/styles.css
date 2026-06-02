@@ -1899,38 +1899,44 @@ textarea { min-height: 88px; resize: vertical; }
   transform: rotate(14deg);
 }
 
-.swipe-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 28px;
-}
-.swipe-btn {
-  width: 64px; height: 64px;
+/* In-card like FAB — replaces the external action buttons. */
+.swipe-like-fab {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  width: 60px; height: 60px;
   border-radius: 50%;
   border: none;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--brand-rose);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: transform .12s ease, box-shadow .15s ease;
-  flex-shrink: 0;
+  box-shadow: 0 12px 28px rgba(20, 8, 40, 0.35), 0 0 0 1px rgba(255,255,255,0.4) inset;
+  transition: transform .12s ease, box-shadow .15s ease, background .15s ease;
+  z-index: 3;
 }
-.swipe-btn svg { width: 26px; height: 26px; }
-.swipe-btn.pass {
-  background: var(--bg-elevated);
-  color: var(--text);
-  border: 1px solid var(--border-soft);
-  box-shadow: 0 10px 24px rgba(20, 8, 40, 0.35);
+.swipe-like-fab:hover {
+  background: #FFFFFF;
+  box-shadow: 0 14px 32px var(--brand-glow), 0 0 0 1px rgba(255,255,255,0.6) inset;
 }
-.swipe-btn.pass:hover { color: var(--danger); border-color: var(--danger); transform: scale(1.06); }
-.swipe-btn.like {
-  width: 76px; height: 76px;
-  background: var(--brand-grad);
-  color: #FFFFFF;
-  box-shadow: 0 14px 32px var(--brand-glow);
+.swipe-like-fab svg { width: 28px; height: 28px; }
+.swipe-like-fab:hover { transform: scale(1.08); }
+.swipe-like-fab:active { transform: scale(0.94); }
+
+.swipe-hint {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 360px;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  pointer-events: none;
 }
-.swipe-btn.like svg { width: 32px; height: 32px; }
-.swipe-btn.like:hover { transform: scale(1.06); }
-.swipe-btn:active { transform: scale(0.94); }
+.swipe-hint .hint-left  { color: var(--danger);     opacity: 0.85; }
+.swipe-hint .hint-right { color: var(--brand-rose); opacity: 0.95; }
 
 .swipe-counter {
   color: var(--text-muted);
