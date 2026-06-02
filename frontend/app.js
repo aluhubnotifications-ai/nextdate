@@ -620,7 +620,15 @@ function makeTagInput(container, initial) {
 async function renderDiscover(root) {
   root.append($("#tpl-discover").content.cloneNode(true));
   $("#refresh-discover").onclick = () => { state.deck = null; loadDiscover(); };
+  $("#btn-swipe-left").onclick  = () => triggerSwipe("pass");
+  $("#btn-swipe-right").onclick = () => triggerSwipe("like");
   await loadDiscover();
+}
+
+function triggerSwipe(choice) {
+  const front = document.querySelector(".swipe-card.front");
+  if (front) flyAndDecide(front, choice);
+  else decide(choice);
 }
 
 function existingSessionPartners() {
@@ -663,7 +671,7 @@ async function loadDiscover() {
 function renderDeck() {
   const stack = $("#swipe-stack");
   const counter = $("#swipe-counter");
-  const hint = $("#swipe-hint");
+  const hint = $("#swipe-controls");
   if (!stack) return;
   stack.innerHTML = "";
 
