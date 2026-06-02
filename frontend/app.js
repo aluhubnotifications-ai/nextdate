@@ -1,4 +1,4 @@
-// ALU Match — frontend
+// NextDate — frontend
 // Custom auth (FastAPI backend) + Supabase Realtime/Postgres for data.
 //
 // ───── HARDCODED CONFIG ─────
@@ -117,7 +117,7 @@ const DEMO_NOTIFICATIONS = [
   { id: "n-5", icon: "💬", kind: "message", title: "New message from Bloom",
     text: "\"perfect — see you there 🌱\"",
     time: "yesterday", group: "earlier", unread: false, session_id: "s-thandi" },
-  { id: "n-4", icon: "🌱", kind: "system", title: "Welcome to ALU Match",
+  { id: "n-4", icon: "🌱", kind: "system", title: "Welcome to NextDate",
     text: "Be kind, be real — campus community guidelines apply.",
     time: "3 days ago", group: "earlier", unread: false },
 ];
