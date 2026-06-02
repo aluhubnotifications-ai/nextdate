@@ -2136,77 +2136,116 @@ textarea { min-height: 88px; resize: vertical; }
 }
 
 /* ============================================================
-   PER-SECTION AMBIENT BACKGROUNDS
-   Each major view gets its own subtle gradient + glow so the user
-   feels the shift when switching tabs, without losing the
-   "Dusk Bloom" brand language. The glow is anchored to corners
-   so it never overlaps text density.
+   PER-SECTION BACKGROUNDS — bold, distinctive, alive
+   Each major view paints its own full-bleed gradient mesh in the
+   ::before pseudo, plus a second decorative ::after layer with
+   floating color blobs. Mesh slowly drifts so the surface feels
+   alive without distracting from the cards on top.
    ============================================================ */
 #view-root {
   position: relative;
   transition: background .35s ease;
 }
-#view-root::before {
+#view-root::before,
+#view-root::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.9;
-  transition: opacity .4s ease, background .4s ease;
+  transition: opacity .45s ease, background .45s ease;
+}
+#view-root::before {
+  background-size: 220% 220%;
+  animation: section-drift 22s ease-in-out infinite;
+}
+#view-root::after {
+  opacity: 0.85;
+  filter: blur(60px) saturate(140%);
+}
+@keyframes section-drift {
+  0%, 100% { background-position: 0% 0%; }
+  50%      { background-position: 100% 100%; }
 }
 
-/* Discover — warm coral & rose dusk (matches the brand action). */
+/* Discover — molten sunset: coral → hot rose → violet. */
 #view-root[data-section="discover"]::before {
   background:
-    radial-gradient(900px 600px at 85% -10%, rgba(255, 138, 91, 0.22), transparent 60%),
-    radial-gradient(720px 480px at 0% 10%,   rgba(255, 61, 110, 0.16), transparent 60%),
-    radial-gradient(900px 700px at 50% 110%, rgba(139, 92, 246, 0.12), transparent 60%);
+    linear-gradient(135deg, #FF6A3D 0%, #FF2D87 45%, #6E2BFF 100%);
+}
+#view-root[data-section="discover"]::after {
+  background:
+    radial-gradient(420px 420px at 12% 18%,  rgba(255, 255, 255, 0.30), transparent 60%),
+    radial-gradient(520px 520px at 88% 78%,  rgba(255, 200, 90, 0.55), transparent 60%),
+    radial-gradient(620px 620px at 50% 110%, rgba(139, 92, 246, 0.55), transparent 60%);
 }
 
-/* Messages — cool indigo & teal (focus, calm chat). */
+/* Messages — cyber ocean: deep teal → cobalt → indigo. */
 #view-root[data-section="chats"]::before {
   background:
-    radial-gradient(900px 600px at 10% -10%, rgba(99, 132, 255, 0.20), transparent 60%),
-    radial-gradient(700px 500px at 100% 30%, rgba(52, 217, 200, 0.14), transparent 60%),
-    radial-gradient(900px 700px at 60% 110%, rgba(80, 70, 160, 0.16), transparent 60%);
+    linear-gradient(135deg, #00C2A8 0%, #1B7BFF 45%, #2A1A8C 100%);
+}
+#view-root[data-section="chats"]::after {
+  background:
+    radial-gradient(480px 480px at 18% 22%, rgba(133, 230, 255, 0.55), transparent 60%),
+    radial-gradient(520px 520px at 82% 70%, rgba(123, 89, 255, 0.55), transparent 60%),
+    radial-gradient(620px 620px at 50% 110%, rgba(0, 220, 200, 0.45), transparent 60%);
 }
 
-/* Matches — fuchsia & blush (the love feed). */
+/* Matches — neon love: hot pink → magenta → tangerine. */
 #view-root[data-section="matches"]::before {
   background:
-    radial-gradient(900px 600px at 50% -10%, rgba(255, 92, 158, 0.24), transparent 60%),
-    radial-gradient(720px 480px at 0% 60%,   rgba(255, 138, 91, 0.16), transparent 60%),
-    radial-gradient(900px 700px at 100% 110%, rgba(186, 92, 255, 0.16), transparent 60%);
+    linear-gradient(135deg, #FF2E8B 0%, #C42BFF 50%, #FF7A2C 100%);
+}
+#view-root[data-section="matches"]::after {
+  background:
+    radial-gradient(460px 460px at 14% 16%, rgba(255, 230, 200, 0.55), transparent 60%),
+    radial-gradient(500px 500px at 86% 32%, rgba(255, 71, 139, 0.55), transparent 60%),
+    radial-gradient(620px 620px at 50% 110%, rgba(196, 43, 255, 0.55), transparent 60%);
 }
 
-/* Notifications — amber & gold (alerts, attention). */
+/* Notifications — solar amber: gold → fire orange → magenta. */
 #view-root[data-section="notifications"]::before {
   background:
-    radial-gradient(900px 600px at 90% -10%, rgba(255, 181, 71, 0.22), transparent 60%),
-    radial-gradient(720px 480px at 10% 30%,  rgba(255, 138, 91, 0.16), transparent 60%),
-    radial-gradient(900px 700px at 50% 110%, rgba(139, 92, 246, 0.10), transparent 60%);
+    linear-gradient(135deg, #FFD23F 0%, #FF7A1A 50%, #C61F8B 100%);
+}
+#view-root[data-section="notifications"]::after {
+  background:
+    radial-gradient(460px 460px at 18% 20%, rgba(255, 255, 200, 0.55), transparent 60%),
+    radial-gradient(520px 520px at 82% 76%, rgba(255, 92, 92, 0.55), transparent 60%),
+    radial-gradient(620px 620px at 50% 110%, rgba(180, 40, 130, 0.55), transparent 60%);
 }
 
-/* Profile — deep violet & mint (identity, growth). */
+/* Profile — galactic violet: deep indigo → electric purple → mint. */
 #view-root[data-section="profile"]::before {
   background:
-    radial-gradient(900px 600px at 15% -10%, rgba(139, 92, 246, 0.22), transparent 60%),
-    radial-gradient(720px 480px at 100% 20%, rgba(52, 217, 160, 0.12), transparent 60%),
-    radial-gradient(900px 700px at 50% 110%, rgba(255, 92, 158, 0.10), transparent 60%);
+    linear-gradient(135deg, #1B0B45 0%, #6A2BFF 55%, #34D9A0 100%);
+}
+#view-root[data-section="profile"]::after {
+  background:
+    radial-gradient(460px 460px at 16% 20%, rgba(176, 124, 255, 0.55), transparent 60%),
+    radial-gradient(520px 520px at 84% 70%, rgba(52, 217, 160, 0.55), transparent 60%),
+    radial-gradient(620px 620px at 50% 110%, rgba(255, 92, 178, 0.45), transparent 60%);
 }
 
-/* Onboarding & auth share a welcoming sunrise. */
+/* Onboarding & Auth — golden sunrise: peach → coral → rose. */
 #view-root[data-section="onboarding"]::before,
 #view-root[data-section="auth"]::before {
   background:
-    radial-gradient(900px 600px at 50% -10%, rgba(255, 181, 71, 0.20), transparent 60%),
-    radial-gradient(720px 480px at 0% 60%,   rgba(255, 138, 91, 0.16), transparent 60%),
-    radial-gradient(900px 700px at 100% 110%, rgba(255, 61, 110, 0.14), transparent 60%);
+    linear-gradient(135deg, #FFD494 0%, #FF8A5B 50%, #FF3D6E 100%);
+}
+#view-root[data-section="onboarding"]::after,
+#view-root[data-section="auth"]::after {
+  background:
+    radial-gradient(460px 460px at 20% 18%, rgba(255, 255, 220, 0.55), transparent 60%),
+    radial-gradient(520px 520px at 80% 70%, rgba(255, 100, 130, 0.55), transparent 60%),
+    radial-gradient(620px 620px at 50% 110%, rgba(255, 165, 80, 0.45), transparent 60%);
 }
 
-/* Light theme — soften the glows so they don't blow out on white. */
-[data-theme="light"] #view-root::before { opacity: 0.6; }
+/* Keep card surfaces readable on top of the bold backgrounds. */
+#view-root::before { opacity: 0.95; }
+[data-theme="light"] #view-root::before { opacity: 0.85; }
+[data-theme="light"] #view-root::after  { opacity: 0.7; }
 
 /* ============================================================
    MOBILE — sizing pass for the Discover deck
