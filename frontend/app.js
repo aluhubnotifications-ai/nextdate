@@ -945,6 +945,13 @@ async function renderChats(root) {
   $("#info-close")?.addEventListener("click", closeInfoPanel);
   $$(".info-action").forEach((b) => b.addEventListener("click", () => onInfoAction(b.dataset.act)));
 
+  // One-tap "Report for harassment" — opens the report modal with the
+  // harassment reason pre-selected so the user can submit immediately.
+  $("#report-harass-btn")?.addEventListener("click", () => {
+    if (!state.activeSession) return toast("Open a conversation first.");
+    openReportModal({ reason: "harassment" });
+  });
+
   state.pendingAttachments = [];
   state.mutedSessions = state.mutedSessions || new Set();
   state.blockedUsers = state.blockedUsers || new Set();
@@ -1151,11 +1158,16 @@ function onInfoAction(act) {
 }
 
 // ---------- report modal ----------
-function openReportModal() {
+function openReportModal(opts = {}) {
   const m = $("#report-modal");
   if (!m) return;
   $("#report-details").value = "";
   $$("#report-reasons input").forEach((r) => (r.checked = false));
+  const preset = opts.reason;
+  if (preset) {
+    const radio = document.querySelector(`#report-reasons input[value="${preset}"]`);
+    if (radio) radio.checked = true;
+  }
   m.classList.remove("hidden");
   m.setAttribute("aria-hidden", "false");
 }
