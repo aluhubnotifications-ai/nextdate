@@ -1806,12 +1806,10 @@ textarea { min-height: 88px; resize: vertical; }
 .swipe-avatar-frame {
   position: relative;
   z-index: 1;
-  flex: 1;
-  align-self: stretch;
-  min-height: 0;
   background: #0B0716;
-  border-radius: 22px;
-  display: flex;
+  border-radius: 28px;
+  padding: 14px 22px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   box-shadow:
