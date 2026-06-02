@@ -145,12 +145,12 @@
 
   <template id="tpl-discover">
     <section>
-      <div class="card" style="margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+      <div class="card" style="margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; gap:14px;">
         <div>
-          <h2 style="margin:0">Discover</h2>
-          <div class="muted" style="font-size:13px; margin-top:4px;">Curated by your intent &amp; term length. Identity stays private until a mutual reveal.</div>
+          <h2 style="margin:0; font-size:22px;">✨ Picked for you today</h2>
+          <div class="muted" style="font-size:13.5px; margin-top:5px; font-weight:500;">AI-curated by your intent &amp; vibe. Identities stay private until you both reveal.</div>
         </div>
-        <button class="btn ghost" id="refresh-discover">Refresh</button>
+        <button class="btn ghost" id="refresh-discover">↻ Refresh</button>
       </div>
       <div id="discover-grid" class="grid"></div>
     </section>
@@ -163,7 +163,11 @@
         <div id="session-list"></div>
       </aside>
       <section class="card chat-main">
-        <div id="chat-empty" class="empty">Pick a chat on the left, or start one from <b>Discover</b>.</div>
+        <div id="chat-empty" class="empty">
+          <div style="font-size:38px; margin-bottom:8px;">💬</div>
+          <div style="font-weight:700; color:#0F0E17; font-size:15.5px;">No chat open</div>
+          <div style="margin-top:4px;">Pick a conversation on the left, or start a new one from <b>Discover</b>.</div>
+        </div>
         <div id="chat-active" class="hidden" style="display:flex; flex-direction:column; flex:1;">
           <div class="chat-header">
             <div style="display:flex; align-items:center; gap:10px;">

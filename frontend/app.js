@@ -480,18 +480,19 @@ async function loadDiscover() {
   for (const s of suggestions) {
     const card = document.createElement("div");
     card.className = "profile-card";
+    const meta = [s.gender, s.zodiac_sign].filter(Boolean).map(escapeHtml).join(" · ");
     card.innerHTML = `
-      <div style="display:flex; align-items:center; gap:12px;">
+      <div style="display:flex; align-items:flex-start; gap:14px;">
         <div class="avatar">${escapeHtml(s.avatar_url || "🦊")}</div>
-        <div>
-          <div style="font-weight:700">${escapeHtml(s.nickname)}</div>
-          <div class="muted" style="font-size:12px;">${escapeHtml(s.gender || "")} ${s.zodiac_sign ? "· " + escapeHtml(s.zodiac_sign) : ""}</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:800; font-size:17px; color:#0F0E17; letter-spacing:-0.2px;">${escapeHtml(s.nickname)}</div>
+          <div class="muted" style="font-size:12.5px; margin-top:3px; font-weight:500;">${meta || "—"}</div>
         </div>
       </div>
-      <div>
-        <span class="chip">match score: <span class="score">${s.score ?? 0}</span></span>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span class="chip">✨ <span class="score">${s.score ?? 0}% match</span></span>
       </div>
-      <button class="btn" data-uid="${s.user_id}">Say hi</button>
+      <button class="btn full" data-uid="${s.user_id}">Say hi 👋</button>
     `;
     card.querySelector("button").onclick = async () => {
       if (DEMO_MODE) {
