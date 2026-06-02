@@ -1837,11 +1837,11 @@ textarea { min-height: 88px; resize: vertical; }
   position: relative;
   padding: 18px 22px 22px;
   background:
-    linear-gradient(135deg, #1B0B45 0%, #4B1FA8 55%, #2B8AE6 100%);
+    linear-gradient(135deg, #064E3B 0%, #0B8C5C 55%, #34D9A0 100%);
   border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   box-shadow:
-    0 18px 40px rgba(20, 8, 60, 0.55),
+    0 18px 40px rgba(6, 60, 40, 0.55),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   display: flex;
   flex-direction: column;
@@ -1855,7 +1855,7 @@ textarea { min-height: 88px; resize: vertical; }
   pointer-events: none;
   background:
     radial-gradient(420px 320px at 90% -10%, rgba(255, 255, 255, 0.22), transparent 60%),
-    radial-gradient(360px 260px at -10% 110%, rgba(43, 138, 230, 0.45), transparent 60%);
+    radial-gradient(360px 260px at -10% 110%, rgba(52, 217, 160, 0.55), transparent 60%);
 }
 .swipe-body > * { position: relative; z-index: 1; }
 .swipe-name-row {
@@ -1921,7 +1921,7 @@ textarea { min-height: 88px; resize: vertical; }
   font-weight: 600;
   color: #FFFFFF;
 }
-.swipe-score { color: #7FFFC1; font-weight: 800; font-size: 13px; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+.swipe-score { color: #FFE57A; font-weight: 800; font-size: 13px; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
 
 .swipe-overlay {
   position: absolute;
