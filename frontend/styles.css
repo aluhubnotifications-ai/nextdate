@@ -1903,70 +1903,39 @@ textarea { min-height: 88px; resize: vertical; }
   transform: rotate(14deg);
 }
 
-/* In-card like FAB — replaces the external action buttons. */
-.swipe-like-fab {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  width: 60px; height: 60px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.96);
-  color: var(--brand-rose);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 12px 28px rgba(20, 8, 40, 0.35), 0 0 0 1px rgba(255,255,255,0.4) inset;
-  transition: transform .12s ease, box-shadow .15s ease, background .15s ease;
-  z-index: 3;
-}
-.swipe-like-fab:hover {
-  background: #FFFFFF;
-  box-shadow: 0 14px 32px var(--brand-glow), 0 0 0 1px rgba(255,255,255,0.6) inset;
-}
-.swipe-like-fab svg { width: 28px; height: 28px; }
-.swipe-like-fab:hover { transform: scale(1.08); }
-.swipe-like-fab:active { transform: scale(0.94); }
 
-.swipe-controls {
+.swipe-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  width: 100%;
-  max-width: 380px;
-  margin-top: 4px;
-}
-.swipe-arrow {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 18px;
-  border-radius: 999px;
+  gap: 28px;
+}
+.swipe-btn {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .12s ease, box-shadow .15s ease;
+  flex-shrink: 0;
+}
+.swipe-btn svg { width: 26px; height: 26px; }
+.swipe-btn.pass {
   background: var(--bg-elevated);
   color: var(--text);
   border: 1px solid var(--border-soft);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  cursor: pointer;
-  box-shadow: 0 10px 24px rgba(20, 8, 40, 0.32);
-  transition: transform .12s ease, color .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+  box-shadow: 0 10px 24px rgba(20, 8, 40, 0.35);
 }
-.swipe-arrow svg { width: 20px; height: 20px; }
-.swipe-arrow.left:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: var(--danger-soft);
-}
-.swipe-arrow.right:hover {
-  color: #FFFFFF;
+.swipe-btn.pass:hover { color: var(--danger); border-color: var(--danger); transform: scale(1.06); }
+.swipe-btn.like {
+  width: 76px; height: 76px;
   background: var(--brand-grad);
-  border-color: transparent;
-  box-shadow: 0 14px 30px var(--brand-glow);
+  color: #FFFFFF;
+  box-shadow: 0 14px 32px var(--brand-glow);
 }
-.swipe-arrow:active { transform: scale(0.96); }
+.swipe-btn.like svg { width: 32px; height: 32px; }
+.swipe-btn.like:hover { transform: scale(1.06); }
+.swipe-btn:active { transform: scale(0.94); }
 
 .swipe-counter {
   color: var(--text-muted);

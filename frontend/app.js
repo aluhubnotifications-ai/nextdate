@@ -40,6 +40,7 @@ const DEMO_ME = {
     user_id: "u-me",
     real_name: "Your Real Name",
     age: 21,
+    country: "Rwanda",
     cohort: "BSc CS 2026",
     whatsapp_number: "+250700000000",
   },
@@ -49,77 +50,77 @@ const DEMO_USERS = [
   {
     user_id: "u-aisha", nickname: "NightOwl", avatar_url: "🦄",
     gender: "Woman", zodiac_sign: "Pisces", score: 94,
-    private: { real_name: "Aisha M.", age: 20, cohort: "BSc Global Challenges 2026", whatsapp_number: "+250788111222" },
+    private: { real_name: "Aisha M.", age: 20, country: "Rwanda", cohort: "BSc Global Challenges 2026", whatsapp_number: "+250788111222" },
   },
   {
     user_id: "u-kofi", nickname: "JollofKing", avatar_url: "🦁",
     gender: "Man", zodiac_sign: "Leo", score: 88,
-    private: { real_name: "Kofi A.", age: 22, cohort: "BSc IBT 2025", whatsapp_number: "+233244555666" },
+    private: { real_name: "Kofi A.", age: 22, country: "Ghana", cohort: "BSc IBT 2025", whatsapp_number: "+233244555666" },
   },
   {
     user_id: "u-thandi", nickname: "Bloom", avatar_url: "🌸",
     gender: "Woman", zodiac_sign: "Libra", score: 82,
-    private: { real_name: "Thandi N.", age: 21, cohort: "BSc Entrepreneurial Leadership 2026", whatsapp_number: "+27821234567" },
+    private: { real_name: "Thandi N.", age: 21, country: "South Africa", cohort: "BSc Entrepreneurial Leadership 2026", whatsapp_number: "+27821234567" },
   },
   {
     user_id: "u-david", nickname: "OctoCoder", avatar_url: "🐙",
     gender: "Man", zodiac_sign: "Virgo", score: 79,
-    private: { real_name: "David O.", age: 23, cohort: "BSc CS 2025", whatsapp_number: "+254700111222" },
+    private: { real_name: "David O.", age: 23, country: "Kenya", cohort: "BSc CS 2025", whatsapp_number: "+254700111222" },
   },
   {
     user_id: "u-zara", nickname: "BeeKween", avatar_url: "🐝",
     gender: "Non-binary", zodiac_sign: "Gemini", score: 76,
-    private: { real_name: "Zara K.", age: 20, cohort: "BSc Global Challenges 2027", whatsapp_number: "+260977333444" },
+    private: { real_name: "Zara K.", age: 20, country: "Zambia", cohort: "BSc Global Challenges 2027", whatsapp_number: "+260977333444" },
   },
   {
     user_id: "u-marcus", nickname: "Tortuga", avatar_url: "🐢",
     gender: "Man", zodiac_sign: "Cancer", score: 71,
-    private: { real_name: "Marcus B.", age: 24, cohort: "BSc IBT 2024", whatsapp_number: "+255712999888" },
+    private: { real_name: "Marcus B.", age: 24, country: "Tanzania", cohort: "BSc IBT 2024", whatsapp_number: "+255712999888" },
   },
   {
     user_id: "u-lily", nickname: "PandaVibes", avatar_url: "🐼",
     gender: "Woman", zodiac_sign: "Taurus", score: 68,
-    private: { real_name: "Lily W.", age: 19, cohort: "BSc CS 2027", whatsapp_number: "+250788777888" },
+    private: { real_name: "Lily W.", age: 19, country: "Rwanda", cohort: "BSc CS 2027", whatsapp_number: "+250788777888" },
   },
   {
     user_id: "u-nia", nickname: "MoonChild", avatar_url: "🌙",
     gender: "Woman", zodiac_sign: "Scorpio", score: 91,
-    private: { real_name: "Nia O.", age: 22, cohort: "BSc Entrepreneurial Leadership 2025", whatsapp_number: "+254712345678" },
+    private: { real_name: "Nia O.", age: 22, country: "Kenya", cohort: "BSc Entrepreneurial Leadership 2025", whatsapp_number: "+254712345678" },
   },
   {
     user_id: "u-emeka", nickname: "PixelDealer", avatar_url: "🎮",
     gender: "Man", zodiac_sign: "Aquarius", score: 84,
-    private: { real_name: "Emeka I.", age: 21, cohort: "BSc CS 2026", whatsapp_number: "+2348023456789" },
+    private: { real_name: "Emeka I.", age: 21, country: "Nigeria", cohort: "BSc CS 2026", whatsapp_number: "+2348023456789" },
   },
   {
     user_id: "u-sade", nickname: "CoffeeSnob", avatar_url: "☕",
     gender: "Woman", zodiac_sign: "Capricorn", score: 80,
-    private: { real_name: "Sade A.", age: 23, cohort: "BSc IBT 2024", whatsapp_number: "+2348134567890" },
+    private: { real_name: "Sade A.", age: 23, country: "Nigeria", cohort: "BSc IBT 2024", whatsapp_number: "+2348134567890" },
   },
   {
     user_id: "u-jamal", nickname: "TrailRunner", avatar_url: "🏃",
     gender: "Man", zodiac_sign: "Sagittarius", score: 77,
-    private: { real_name: "Jamal K.", age: 22, cohort: "BSc Global Challenges 2025", whatsapp_number: "+254723456789" },
+    private: { real_name: "Jamal K.", age: 22, country: "Kenya", cohort: "BSc Global Challenges 2025", whatsapp_number: "+254723456789" },
   },
   {
     user_id: "u-amara", nickname: "InkAndChai", avatar_url: "📚",
     gender: "Woman", zodiac_sign: "Aries", score: 73,
-    private: { real_name: "Amara D.", age: 20, cohort: "BSc Entrepreneurial Leadership 2027", whatsapp_number: "+250788234567" },
+    private: { real_name: "Amara D.", age: 20, country: "Rwanda", cohort: "BSc Entrepreneurial Leadership 2027", whatsapp_number: "+250788234567" },
   },
   {
     user_id: "u-leo", nickname: "JazzNerd", avatar_url: "🎷",
     gender: "Man", zodiac_sign: "Pisces", score: 70,
-    private: { real_name: "Leo M.", age: 24, cohort: "BSc CS 2024", whatsapp_number: "+233503456789" },
+    private: { real_name: "Leo M.", age: 24, country: "Ghana", cohort: "BSc CS 2024", whatsapp_number: "+233503456789" },
   },
   {
     user_id: "u-rita", nickname: "Sunbeam", avatar_url: "🌻",
     gender: "Woman", zodiac_sign: "Leo", score: 66,
-    private: { real_name: "Rita W.", age: 19, cohort: "BSc Global Challenges 2027", whatsapp_number: "+27834567890" },
+    private: { real_name: "Rita W.", age: 19, country: "South Africa", cohort: "BSc Global Challenges 2027", whatsapp_number: "+27834567890" },
   },
   {
     user_id: "u-zane", nickname: "DesertFox", avatar_url: "🌵",
     gender: "Non-binary", zodiac_sign: "Virgo", score: 63,
-    private: { real_name: "Zane R.", age: 22, cohort: "BSc IBT 2026", whatsapp_number: "+264811234567" },
+    private: { real_name: "Zane R.", age: 22, country: "Namibia", cohort: "BSc IBT 2026", whatsapp_number: "+264811234567" },
   },
 ];
 
@@ -520,6 +521,7 @@ function renderOnboarding(root) {
   if (state.privateIdentity) {
     $("#real_name").value        = state.privateIdentity.real_name || "";
     $("#age").value              = state.privateIdentity.age || "";
+    $("#country").value          = state.privateIdentity.country || "";
     $("#cohort").value           = state.privateIdentity.cohort || "";
     $("#whatsapp_number").value  = state.privateIdentity.whatsapp_number || "";
   }
@@ -552,6 +554,7 @@ function renderOnboarding(root) {
       user_id: state.user.id,
       real_name: $("#real_name").value || null,
       age: $("#age").value ? Number($("#age").value) : null,
+      country: $("#country").value || null,
       cohort: $("#cohort").value || null,
       whatsapp_number: $("#whatsapp_number").value || null,
     };
@@ -621,15 +624,16 @@ function makeTagInput(container, initial) {
 async function renderDiscover(root) {
   root.append($("#tpl-discover").content.cloneNode(true));
   $("#refresh-discover").onclick = () => { state.deck = null; state.deckIndex = 0; loadDiscover(); };
-  $("#btn-swipe-back").onclick = () => triggerNav("back");
-  $("#btn-swipe-next").onclick = () => triggerNav("next");
+  $("#btn-pass").onclick = () => triggerAction("pass");
+  $("#btn-like").onclick = () => triggerAction("like");
   await loadDiscover();
 }
 
-function triggerNav(dir) {
+function triggerAction(choice) {
   const front = document.querySelector(".swipe-card.front");
-  if (front) flyAndCycle(front, dir);
-  else cycle(dir);
+  if (choice === "like") return likeCurrent(front);
+  if (front) flyAndCycle(front, "next");
+  else cycle("next");
 }
 
 function existingSessionPartners() {
@@ -669,7 +673,7 @@ async function loadDiscover() {
 function renderDeck() {
   const stack = $("#swipe-stack");
   const counter = $("#swipe-counter");
-  const controls = $("#swipe-controls");
+  const controls = $("#swipe-actions");
   if (!stack) return;
   stack.innerHTML = "";
 
@@ -716,9 +720,6 @@ function buildSwipeCard(user, isFront) {
   card.innerHTML = `
     <div class="swipe-hero">
       <div class="swipe-avatar">${escapeHtml(user.avatar_url || "🦊")}</div>
-      <button class="swipe-like-fab" type="button" aria-label="Like ${escapeHtml(user.nickname)}">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7-4.35-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.65-7 10-7 10z"/></svg>
-      </button>
     </div>
     <div class="swipe-body">
       <div class="swipe-name-row">
@@ -734,7 +735,7 @@ function buildSwipeCard(user, isFront) {
       </div>
     </div>
     <div class="swipe-overlay like-overlay">LIKE</div>
-    <div class="swipe-overlay pass-overlay">NEXT</div>
+    <div class="swipe-overlay pass-overlay">PASS</div>
   `;
 
   const infoBtn = card.querySelector(".swipe-info");
@@ -746,14 +747,6 @@ function buildSwipeCard(user, isFront) {
     infoBtn.setAttribute("aria-expanded", String(open));
   });
 
-  const likeFab = card.querySelector(".swipe-like-fab");
-  likeFab.addEventListener("pointerdown", (e) => e.stopPropagation());
-  likeFab.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (!isFront) return;
-    likeCurrent(card);
-  });
-
   if (isFront) attachSwipe(card);
   return card;
 }
@@ -763,7 +756,7 @@ function attachSwipe(card) {
   const threshold = 110;
 
   const onDown = (e) => {
-    if (e.target.closest(".swipe-info") || e.target.closest(".swipe-like-fab")) return;
+    if (e.target.closest(".swipe-info")) return;
     dragging = true;
     pointerId = e.pointerId;
     startX = e.clientX; startY = e.clientY; dx = 0; dy = 0;
@@ -1672,6 +1665,7 @@ async function hydrateIdentity() {
   panel.innerHTML = `
     <div class="identity-row"><span>Real name</span><span>${escapeHtml(id.real_name || "—")}</span></div>
     <div class="identity-row"><span>Age</span><span>${id.age ?? "—"}</span></div>
+    <div class="identity-row"><span>Country</span><span>${escapeHtml(id.country || "—")}</span></div>
     <div class="identity-row"><span>Cohort</span><span>${escapeHtml(id.cohort || "—")}</span></div>
     <div class="identity-row"><span>WhatsApp</span><span>${wa}</span></div>
   `;
@@ -1798,6 +1792,7 @@ function renderProfile(root) {
     <div class="muted" style="font-size:12px;">Private (only you can see this)</div>
     <div class="identity-row"><span>Real name</span><span>${escapeHtml(pi?.real_name || "—")}</span></div>
     <div class="identity-row"><span>Age</span><span>${pi?.age ?? "—"}</span></div>
+    <div class="identity-row"><span>Country</span><span>${escapeHtml(pi?.country || "—")}</span></div>
     <div class="identity-row"><span>Cohort</span><span>${escapeHtml(pi?.cohort || "—")}</span></div>
     <div class="identity-row"><span>WhatsApp</span><span>${escapeHtml(pi?.whatsapp_number || "—")}</span></div>
   `;
