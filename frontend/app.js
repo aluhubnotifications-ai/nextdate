@@ -485,7 +485,7 @@ async function loadDiscover() {
       <div style="display:flex; align-items:flex-start; gap:14px;">
         <div class="avatar">${escapeHtml(s.avatar_url || "🦊")}</div>
         <div style="flex:1; min-width:0;">
-          <div style="font-weight:800; font-size:17px; color:#0F0E17; letter-spacing:-0.2px;">${escapeHtml(s.nickname)}</div>
+          <div style="font-weight:800; font-size:17px; color:#FFFFFF; letter-spacing:-0.2px;">${escapeHtml(s.nickname)}</div>
           <div class="muted" style="font-size:12.5px; margin-top:3px; font-weight:500;">${meta || "—"}</div>
         </div>
       </div>
