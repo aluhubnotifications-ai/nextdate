@@ -3,11 +3,16 @@
 -- date with the current `main` branch in one shot.
 --
 -- This concatenates the four migrations added in the embedding +
--- realtime-notifications work:
+-- realtime-notifications work, plus a defensive re-apply of the
+-- country column from migration 20260602000001 (in case it never
+-- landed) and a final NOTIFY so PostgREST reloads its schema cache.
+--
+--   0. add private_identities.country if missing
 --   1. 20260603000001_embedding_matching.sql
 --   2. 20260603000002_invalidate_embedding_on_edit.sql
 --   3. 20260603000003_align_to_frontend.sql
 --   4. 20260603000004_notifications.sql
+--   5. notify pgrst, 'reload schema'
 --
 -- Every statement is idempotent (IF NOT EXISTS / CREATE OR REPLACE /
 -- DROP TRIGGER IF EXISTS), so it's safe to re-run.
@@ -21,6 +26,14 @@
 --     psql "$DATABASE_URL" -f supabase/apply_recent.sql
 -- ============================================================
 
+
+-- ============================================================
+-- 0. Defensive: make sure country is on private_identities. It was
+--    added by 20260602000001_add_country.sql; this is here so a DB
+--    that somehow missed that migration can still catch up.
+-- ============================================================
+alter table public.private_identities
+  add column if not exists country varchar;
 
 -- ============================================================
 -- 20260603000001_embedding_matching.sql
@@ -455,3 +468,10 @@ create trigger trg_notify_reveal
   after update on public.chat_sessions
   for each row execute function public.notify_on_reveal();
 
+-- ============================================================
+-- Tell PostgREST to refresh its schema cache so columns added /
+-- dropped above are picked up immediately. Without this, clients
+-- can hit "Could not find the 'X' column ... in the schema cache"
+-- right after a migration.
+-- ============================================================
+notify pgrst, 'reload schema';
