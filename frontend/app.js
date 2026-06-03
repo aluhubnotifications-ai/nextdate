@@ -384,23 +384,20 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem(THEME_KEY, theme);
   const isLight = theme === "light";
-  const iconDark  = document.getElementById("theme-icon-dark");
-  const iconLight = document.getElementById("theme-icon-light");
-  const label     = document.getElementById("theme-label");
-  if (iconDark)  iconDark.classList.toggle("hidden", isLight);
-  if (iconLight) iconLight.classList.toggle("hidden", !isLight);
-  if (label)     label.textContent = isLight ? "Dark mode" : "Light mode";
+  document.querySelectorAll("#theme-icon-dark, .theme-icon-dark").forEach(el => el.classList.toggle("hidden", isLight));
+  document.querySelectorAll("#theme-icon-light, .theme-icon-light").forEach(el => el.classList.toggle("hidden", !isLight));
+  const label = document.getElementById("theme-label");
+  if (label) label.textContent = isLight ? "Dark mode" : "Light mode";
 }
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   applyTheme(saved === "light" ? "light" : "dark");
-  const btn = document.getElementById("theme-toggle");
-  if (btn) {
-    btn.onclick = () => {
-      const current = document.documentElement.dataset.theme || "dark";
-      applyTheme(current === "light" ? "dark" : "light");
-    };
-  }
+  const toggle = () => {
+    const current = document.documentElement.dataset.theme || "dark";
+    applyTheme(current === "light" ? "dark" : "light");
+  };
+  document.getElementById("theme-toggle")?.addEventListener("click", toggle);
+  document.getElementById("mobile-theme-toggle")?.addEventListener("click", toggle);
 }
 
 // ---------- init ----------
@@ -1806,6 +1803,7 @@ function renderProfile(root) {
     <div class="identity-row"><span>WhatsApp</span><span>${escapeHtml(pi?.whatsapp_number || "—")}</span></div>
   `;
   $("#edit-profile").onclick = () => navigate("onboarding");
+  $("#profile-logout").onclick = () => doLogout();
   const copy = document.createElement("div");
   copy.className = "profile-copyright";
   copy.innerHTML = `<span class="mark">&copy; 2026 NextDate</span> &middot; All rights reserved.`;

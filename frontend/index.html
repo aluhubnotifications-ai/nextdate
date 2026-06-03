@@ -97,6 +97,10 @@
           </div>
         </div>
         <div class="mobile-topbar-actions">
+          <button class="icon-btn" id="mobile-theme-toggle" aria-label="Toggle light/dark">
+            <svg class="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="theme-icon-light hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          </button>
           <button class="icon-btn" id="mobile-notif-btn" aria-label="Notifications">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
             <span class="dot hidden" id="mobile-notif-dot">0</span>
@@ -508,8 +512,9 @@
       <div class="card">
         <h2 style="margin-top:0">Your profile</h2>
         <div id="profile-summary"></div>
-        <div style="margin-top:14px; display:flex; gap:10px;">
+        <div style="margin-top:14px; display:flex; gap:10px; flex-wrap: wrap;">
           <button class="btn" id="edit-profile">Edit</button>
+          <button class="btn ghost" id="profile-logout">Log out</button>
         </div>
       </div>
     </section>
