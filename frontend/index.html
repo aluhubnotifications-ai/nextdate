@@ -508,12 +508,16 @@
   </template>
 
   <template id="tpl-profile">
-    <section>
-      <div class="card">
-        <h2 style="margin-top:0">Your profile</h2>
+    <section class="profile-view">
+      <div class="profile-card">
+        <div class="profile-hero">
+          <div class="profile-avatar" id="profile-avatar">🦊</div>
+          <div class="profile-name" id="profile-name">—</div>
+          <div class="profile-tagline" id="profile-tagline">—</div>
+        </div>
         <div id="profile-summary"></div>
-        <div style="margin-top:14px; display:flex; gap:10px; flex-wrap: wrap;">
-          <button class="btn" id="edit-profile">Edit</button>
+        <div class="profile-actions">
+          <button class="btn" id="edit-profile">Edit profile</button>
           <button class="btn ghost" id="profile-logout">Log out</button>
         </div>
       </div>
