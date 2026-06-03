@@ -759,6 +759,18 @@ textarea { min-height: 88px; resize: vertical; }
   flex-shrink: 0;
 }
 
+@media (max-width: 760px) {
+  .chat-header { padding: 10px 12px; gap: 8px; }
+  .chat-header .back-btn { width: 32px; height: 32px; }
+  .chat-header .back-btn svg { width: 20px; height: 20px; }
+  .chat-header .avatar { width: 36px; height: 36px; font-size: 16px; }
+  .chat-header .peer-name { font-size: 14px; }
+  .chat-header .peer-meta { font-size: 10.5px; }
+  .chat-header-actions { gap: 4px; }
+  .chat-header-actions .icon-btn { width: 32px; height: 32px; }
+  .chat-header-actions .icon-btn svg { width: 16px; height: 16px; }
+}
+
 .chat-body {
   flex: 1;
   overflow-y: auto;
@@ -1608,6 +1620,49 @@ textarea { min-height: 88px; resize: vertical; }
   background: var(--success-soft);
   border-color: rgba(52, 217, 160, 0.38);
   color: #8EEAC5;
+}
+.reveal-banner #reveal-text { flex: 1; min-width: 0; }
+.reveal-dismiss {
+  background: transparent;
+  border: 0;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  color: currentColor;
+  opacity: 0.65;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: opacity .15s ease, background .15s ease;
+}
+.reveal-dismiss:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
+.reveal-dismiss svg { width: 14px; height: 14px; }
+
+.reveal-restore {
+  align-self: flex-start;
+  margin: 10px 22px 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
+}
+.reveal-restore:hover { color: var(--brand-rose); border-color: var(--brand-rose); }
+.reveal-restore svg { width: 14px; height: 14px; }
+
+@media (max-width: 760px) {
+  .reveal-banner {
+    margin: 10px 12px 0;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    gap: 8px;
+  }
+  .reveal-restore { margin: 8px 12px 0; }
 }
 
 .identity-panel {

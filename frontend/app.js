@@ -962,6 +962,16 @@ async function renderChats(root) {
   });
   $("#msg-input").addEventListener("input", autoGrowTextarea);
   $("#reveal-btn").onclick = approveReveal;
+  $("#reveal-dismiss")?.addEventListener("click", () => {
+    if (!state.activeSession) return;
+    setRevealDismissed(state.activeSession.id, true);
+    refreshRevealState();
+  });
+  $("#reveal-restore")?.addEventListener("click", () => {
+    if (!state.activeSession) return;
+    setRevealDismissed(state.activeSession.id, false);
+    refreshRevealState();
+  });
   $("#back-to-list")?.addEventListener("click", closeActiveChat);
   $("#chat-search-input")?.addEventListener("input", (e) => filterSessions(e.target.value));
   $("#emoji-btn").onclick = openEmojiModal;
@@ -1981,16 +1991,30 @@ function cleanupRealtime() {
   if (state.sessionChannel)  { supabase.removeChannel(state.sessionChannel);  state.sessionChannel  = null; }
 }
 
+const REVEAL_DISMISS_PREFIX = "nd_reveal_dismissed:";
+
+function isRevealDismissed(sessionId) {
+  try { return localStorage.getItem(REVEAL_DISMISS_PREFIX + sessionId) === "1"; }
+  catch { return false; }
+}
+function setRevealDismissed(sessionId, dismissed) {
+  try {
+    if (dismissed) localStorage.setItem(REVEAL_DISMISS_PREFIX + sessionId, "1");
+    else localStorage.removeItem(REVEAL_DISMISS_PREFIX + sessionId);
+  } catch {}
+}
+
 async function refreshRevealState() {
   const s = state.activeSession;
   if (!s) return;
-  const banner = $("#reveal-banner");
-  const text   = $("#reveal-text");
-  const btn    = $("#reveal-btn");
-  const panel  = $("#identity-panel");
+  const banner  = $("#reveal-banner");
+  const text    = $("#reveal-text");
+  const btn     = $("#reveal-btn");
+  const panel   = $("#identity-panel");
+  const restore = $("#reveal-restore");
 
   const meIsA = state.user.id === s.user_a;
-  const myFlag   = meIsA ? s.user_a_approved_reveal : s.user_b_approved_reveal;
+  const myFlag    = meIsA ? s.user_a_approved_reveal : s.user_b_approved_reveal;
   const theirFlag = meIsA ? s.user_b_approved_reveal : s.user_a_approved_reveal;
 
   banner.classList.remove("locked", "unlocked");
@@ -2019,6 +2043,14 @@ async function refreshRevealState() {
     btn.textContent = "Reveal my identity";
     panel.classList.add("hidden");
   }
+
+  // The user can hide the banner per-chat; show a tiny restore chip in its
+  // place. Once their partner approves a reveal we always pop the banner
+  // back so the prompt isn't missed.
+  const partnerJustRevealed = theirFlag && !myFlag;
+  const dismissed = isRevealDismissed(s.id) && !partnerJustRevealed;
+  banner.classList.toggle("hidden", dismissed);
+  restore?.classList.toggle("hidden", !dismissed);
 }
 
 async function approveReveal() {

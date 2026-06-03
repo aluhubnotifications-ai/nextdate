@@ -393,7 +393,14 @@
           <div id="reveal-banner" class="reveal-banner locked">
             <div id="reveal-text">Identities are hidden. Tap reveal when you both feel ready.</div>
             <button id="reveal-btn" class="btn warn sm">Reveal my identity</button>
+            <button id="reveal-dismiss" class="reveal-dismiss" type="button" aria-label="Hide reveal banner" title="Hide">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
+          <button id="reveal-restore" class="reveal-restore hidden" type="button" aria-label="Show reveal status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>Reveal status</span>
+          </button>
           <div id="identity-panel" class="identity-panel hidden"></div>
           <div id="chat-body" class="chat-body"></div>
           <div class="composer">
