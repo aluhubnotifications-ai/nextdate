@@ -378,6 +378,21 @@ document.getElementById("open-drawer")?.addEventListener("click", openDrawer);
 document.getElementById("sidebar-backdrop")?.addEventListener("click", closeDrawer);
 document.getElementById("mobile-notif-btn")?.addEventListener("click", () => navigate("notifications"));
 
+// Keep the bottom nav above the Android on-screen keyboard. Modern browsers
+// honour the viewport meta's interactive-widget=resizes-content; this is a
+// fallback for older Android Chrome / WebView via VisualViewport.
+(function trackKeyboardInset() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const sync = () => {
+    const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty("--kb-inset", inset + "px");
+  };
+  vv.addEventListener("resize", sync);
+  vv.addEventListener("scroll", sync);
+  sync();
+})();
+
 // ---------- theme ----------
 const THEME_KEY = "alu_match_theme";
 function applyTheme(theme) {
