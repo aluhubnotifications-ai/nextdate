@@ -638,9 +638,7 @@ function existingSessionPartners() {
 }
 
 async function loadDiscover() {
-  const host = $("#swipe-empty-host");
   const stack = $("#swipe-stack");
-  if (host) host.innerHTML = "";
   stack.innerHTML = `<div class="swipe-empty">Finding compatible people…</div>`;
 
   let suggestions = [];
@@ -650,8 +648,7 @@ async function loadDiscover() {
     try {
       suggestions = await api(`/suggestions/${state.user.id}`);
     } catch (err) {
-      stack.innerHTML = "";
-      if (host) host.innerHTML = `<div class="swipe-empty">Couldn't reach the matching engine.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
+      stack.innerHTML = `<div class="swipe-empty">Couldn't reach the matching engine.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
       return;
     }
   }
@@ -667,14 +664,12 @@ async function loadDiscover() {
 
 function renderDeck() {
   const stack = $("#swipe-stack");
-  const host = $("#swipe-empty-host");
   if (!stack) return;
   stack.innerHTML = "";
-  if (host) host.innerHTML = "";
 
   const total = state.deck?.length || 0;
   if (!total) {
-    if (host) host.innerHTML = `
+    stack.innerHTML = `
       <div class="swipe-empty">
         <div class="swipe-empty-emoji">🌙</div>
         <h3>No profiles yet</h3>

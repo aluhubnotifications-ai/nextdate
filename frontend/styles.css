@@ -1757,14 +1757,6 @@ textarea { min-height: 88px; resize: vertical; }
   max-width: 460px;
   height: min(640px, 72dvh);
 }
-.swipe-empty-host {
-  width: 100%;
-  max-width: 460px;
-  min-height: min(640px, 72dvh);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 .swipe-card {
   position: absolute;
   inset: 0;
@@ -1875,6 +1867,7 @@ textarea { min-height: 88px; resize: vertical; }
   flex-direction: column;
   gap: 8px;
 }
+.swipe-details[hidden] { display: none; }
 .swipe-detail-row {
   display: flex;
   align-items: center;
@@ -1970,14 +1963,15 @@ textarea { min-height: 88px; resize: vertical; }
   letter-spacing: 0.2px;
 }
 .swipe-empty {
-  width: 100%;
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   gap: 10px;
-  padding: 60px 28px;
+  padding: 40px 28px;
   background: #FFFFFF;
   color: #1A1A2E;
   border-radius: 28px;
@@ -1986,7 +1980,7 @@ textarea { min-height: 88px; resize: vertical; }
     0 4px 12px rgba(20, 8, 40, 0.08);
 }
 .swipe-empty-emoji { font-size: 64px; }
-.swipe-empty h3 { margin: 4px 0 0; font-size: 20px; }
+.swipe-empty h3 { margin: 4px 0 0; font-size: 20px; color: #1A1A2E; }
 .swipe-empty p { color: #8A8AA0; margin: 0 0 12px; max-width: 280px; }
 
 /* ============================================================
@@ -2253,25 +2247,23 @@ textarea { min-height: 88px; resize: vertical; }
 @media (max-width: 760px) {
   .discover-shell {
     max-width: 100%;
-    padding: 16px 14px 18px;
-    margin: 4px 0 18px;
-    gap: 12px;
+    padding: 8px 12px 12px;
+    margin: 0 auto;
+    gap: 10px;
     border-radius: 24px;
   }
+  /* On mobile the topbar already shows the brand — reclaim the header space for the card. */
+  .discover-header { display: none; }
   .discover-title { font-size: 22px; }
   .discover-sub   { font-size: 12px; }
 
   .swipe-stack {
-    height: min(620px, calc(100dvh - 160px));
-    max-width: 100%;
-  }
-  .swipe-empty-host {
-    min-height: min(620px, calc(100dvh - 160px));
+    height: min(560px, calc(100dvh - 170px));
     max-width: 100%;
   }
 
-  .swipe-hero          { height: 240px; }
-  .swipe-avatar        { font-size: 128px; }
+  .swipe-hero          { height: 210px; }
+  .swipe-avatar        { font-size: 116px; }
 
   .swipe-body { padding: 18px 20px 18px; gap: 12px; }
   .swipe-name { font-size: 23px; }
