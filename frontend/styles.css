@@ -2316,66 +2316,24 @@ textarea { min-height: 88px; resize: vertical; }
 }
 
 /* ============================================================
-   COPYRIGHT FOOTERS
-   Sidebar footer pinned at the bottom of the desktop sidebar /
-   mobile drawer; mobile-footer rendered inline at the end of
-   every padded view on phones.
+   PROFILE COPYRIGHT
+   Lives only inside the Profile view, so it never crowds the
+   Discover deck or the chat surface on mobile.
    ============================================================ */
-.sidebar-footer {
-  margin-top: auto;
-  padding: 14px 6px 4px;
+.profile-copyright {
+  margin-top: 18px;
+  padding: 14px 16px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.25px;
   border-top: 1px solid var(--border);
 }
-.sidebar-footer .copyright {
-  display: block;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-dim);
-  text-align: center;
-  letter-spacing: 0.15px;
-  line-height: 1.4;
-}
-
-.mobile-footer {
-  display: none;
-  margin: 18px auto 0;
-  padding: 12px 14px;
-  width: fit-content;
-  max-width: calc(100% - 8px);
-  text-align: center;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.78);
-  letter-spacing: 0.25px;
-  background: rgba(0, 0, 0, 0.32);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 999px;
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  white-space: nowrap;
-}
-
-@media (max-width: 1180px) {
-  .sidebar-footer .copyright { font-size: 0; line-height: 0; }
-  .sidebar-footer .copyright::before {
-    content: "© 2026";
-    font-size: 10px;
-    line-height: 1.4;
-  }
-}
-
-@media (max-width: 760px) {
-  .sidebar-footer .copyright { font-size: 11px; line-height: 1.4; }
-  .sidebar-footer .copyright::before { content: none; }
-  .mobile-footer { display: block; }
-}
-
-@media (max-width: 380px) {
-  .mobile-footer { font-size: 9.5px; padding: 10px 12px; letter-spacing: 0.15px; }
-}
-
-[data-theme="light"] .mobile-footer {
-  color: rgba(0, 0, 0, 0.68);
-  background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(0, 0, 0, 0.08);
+.profile-copyright .mark {
+  background: var(--brand-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
 }
