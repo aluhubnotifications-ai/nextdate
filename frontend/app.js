@@ -1934,6 +1934,54 @@ function renderBubbleAttachments(atts) {
 }
 
 // ---------- voice messages ----------
+function showMicHelp(reason) {
+  // Build (or reuse) a small modal that explains how to re-enable the
+  // microphone, since once the browser has stored a "Block" decision
+  // we can't re-prompt from JS.
+  let modal = document.getElementById("mic-help-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "mic-help-modal";
+    modal.className = "modal-backdrop";
+    modal.innerHTML = `
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3>Allow microphone access</h3>
+          <button class="icon-btn" data-act="close" aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body mic-help-body">
+          <p class="mic-help-reason"></p>
+          <ol>
+            <li>Tap the <b>lock / info icon</b> in your browser's address bar.</li>
+            <li>Find <b>Microphone</b> and switch it to <b>Allow</b>.</li>
+            <li>Come back to this tab and try recording again.</li>
+          </ol>
+          <p class="muted" style="font-size:12.5px;">
+            On Android Chrome you can also go to <b>Settings → Site settings → Microphone</b>
+            and remove the block for this site.
+          </p>
+        </div>
+        <div class="modal-foot">
+          <button class="btn ghost" data-act="close">Close</button>
+          <button class="btn" data-act="retry">Try again</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const close = () => modal.classList.add("hidden");
+    modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+    modal.querySelectorAll("[data-act=close]").forEach((b) => b.addEventListener("click", close));
+    modal.querySelector("[data-act=retry]").addEventListener("click", () => {
+      close();
+      startRecording();
+    });
+  }
+  modal.querySelector(".mic-help-reason").textContent =
+    reason || "We can't hear you yet — the browser is blocking microphone access for this site.";
+  modal.classList.remove("hidden");
+}
+
 const recording = { recorder: null, stream: null, chunks: [], startedAt: 0, timer: null };
 
 async function startRecording() {
@@ -1941,12 +1989,27 @@ async function startRecording() {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
     return toast("Voice messages aren't supported on this device.");
   }
+  if (!window.isSecureContext) {
+    return showMicHelp("This page must be loaded over HTTPS for the microphone to work.");
+  }
+
+  // If we already know permission was blocked, jump straight to the
+  // help dialog — the browser won't show the prompt again on its own.
+  try {
+    const status = await navigator.permissions?.query?.({ name: "microphone" });
+    if (status?.state === "denied") return showMicHelp();
+  } catch { /* permissions API is optional */ }
+
   try {
     recording.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
-    return toast(err.name === "NotAllowedError"
-      ? "Microphone access denied."
-      : "Couldn't start the microphone.");
+    if (err.name === "NotAllowedError" || err.name === "SecurityError") {
+      return showMicHelp();
+    }
+    if (err.name === "NotFoundError" || err.name === "OverconstrainedError") {
+      return toast("No microphone found on this device.");
+    }
+    return toast("Couldn't start the microphone — try again.");
   }
   const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"]
     .find((t) => MediaRecorder.isTypeSupported(t)) || "";
