@@ -217,13 +217,20 @@ def get_curated_suggestions(
 
     my_interests = set(prefs.interests)
     my_hobbies = set(prefs.hobbies)
+    # Maximum overlap we could *possibly* score against this user's prefs:
+    # if a candidate shared every interest and every hobby, their raw score
+    # would equal this. We divide each candidate's raw score by it to get
+    # a percentage in [0, 100] that's stable across people with different
+    # numbers of tags.
+    my_max = 2 * len(my_interests) + len(my_hobbies)
 
     scored: list[tuple[float, str]] = []
     for r in rows:
-        s = 0.0
-        s += 2 * len(my_interests.intersection(set(r.get("interests") or [])))
-        s += 1 * len(my_hobbies.intersection(set(r.get("hobbies") or [])))
-        scored.append((s, r["user_id"]))
+        common_i = len(my_interests.intersection(set(r.get("interests") or [])))
+        common_h = len(my_hobbies.intersection(set(r.get("hobbies") or [])))
+        raw = 2 * common_i + common_h
+        pct = (raw / my_max) * 100.0 if my_max > 0 else 0.0
+        scored.append((round(pct, 1), r["user_id"]))
 
     scored.sort(key=lambda x: x[0], reverse=True)
     ordered = [(uid, s) for s, uid in scored]

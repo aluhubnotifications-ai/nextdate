@@ -1018,9 +1018,19 @@ function buildSwipeCard(user, isFront, remaining) {
   const hasInterests = interests.length > 0;
   const remainingLabel = `${remaining} profile${remaining === 1 ? "" : "s"} remaining`;
 
+  // Backend now hands us a 0-100 percentage in `score`. Show it as
+  // an always-visible chip on the card head so users can see the
+  // match strength at a glance instead of digging into "More info".
+  const scoreNum = typeof user.score === "number" ? Math.round(user.score) : null;
+  const scoreTone = scoreNum == null ? "" : scoreNum >= 70 ? "hot" : scoreNum >= 40 ? "warm" : "mild";
+  const scoreChip = scoreNum != null
+    ? `<span class="swipe-score-chip ${scoreTone}" title="Match score based on shared interests + hobbies">${scoreNum}% match</span>`
+    : "";
+
   card.innerHTML = `
     <div class="swipe-hero">
       <div class="swipe-avatar">${escapeHtml(user.avatar_url || "🧑")}</div>
+      ${scoreChip}
     </div>
     <div class="swipe-body">
       <div class="swipe-name-row">
@@ -1034,7 +1044,7 @@ function buildSwipeCard(user, isFront, remaining) {
       </div>
       <div class="swipe-details" hidden>
         ${hasInterests ? `<div class="swipe-detail-row"><span class="swipe-detail-label">Into</span><div class="swipe-chips">${interests.map((i) => `<span class="swipe-chip">${i}</span>`).join("")}</div></div>` : ""}
-        ${user.score != null ? `<div class="swipe-detail-row"><span class="swipe-detail-label">Vibe match</span><span class="swipe-score">${user.score}%</span></div>` : ""}
+        ${scoreNum != null ? `<div class="swipe-detail-row"><span class="swipe-detail-label">Vibe match</span><span class="swipe-score">${scoreNum}%</span></div>` : ""}
       </div>
       <div class="swipe-actions">
         <button class="swipe-btn pass" type="button" data-action="pass" aria-label="Pass">

@@ -3075,3 +3075,26 @@ html[data-theme="light"] .picture-preview {
   width: 120px; height: 120px; border-radius: 50%; object-fit: cover;
   border: 3px solid rgba(255,255,255,.12);
 }
+
+/* Always-visible match-score chip on the swipe card */
+.swipe-hero { position: relative; }
+.swipe-score-chip {
+  position: absolute;
+  top: 14px; right: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: .2px;
+  color: #fff;
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 4px 16px rgba(0,0,0,.25);
+}
+.swipe-score-chip.hot  { background: linear-gradient(135deg, #FF3D6E 0%, #FF8A5B 100%); border-color: rgba(255,255,255,.4); }
+.swipe-score-chip.warm { background: linear-gradient(135deg, #FF8A5B 0%, #FFD06B 100%); border-color: rgba(255,255,255,.35); color: #271A3D; }
+.swipe-score-chip.mild { background: rgba(255,255,255,.18); color: #fff; }
+
+html[data-theme="light"] .swipe-score-chip.mild { background: rgba(0,0,0,.55); color: #fff; }
