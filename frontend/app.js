@@ -1685,6 +1685,11 @@ async function loadSessions() {
     peerMap = Object.fromEntries((peers || []).map((p) => [p.id, p]));
   }
 
+  // Drop the skeleton rows before painting the real list — otherwise
+  // skelSessionList's placeholders sit at the top of #session-list
+  // and the user thinks the page is still loading.
+  list.innerHTML = "";
+
   for (const s of data) {
     const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
     const peer = peerMap[peerId] || { nickname: "Unknown", avatar_url: "🦊" };
