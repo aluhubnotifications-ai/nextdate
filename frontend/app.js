@@ -15,7 +15,7 @@ const EMAIL_DOMAINS     = ["alustudent.com", "aluedu.org"];
 // When true, the app runs entirely on hardcoded users / sessions / messages
 // below. No Supabase, no backend. Flip to false once your AI matching engine
 // + Supabase tables are wired up.
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 
 const DEMO_ME = {
   id: "u-me",
