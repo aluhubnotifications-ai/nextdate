@@ -258,6 +258,101 @@ const toast = (msg, ms = 2400) => {
   toast._t = setTimeout(() => (el.style.display = "none"), ms);
 };
 
+// ---------- loading affordances ----------
+// Top progress bar (Facebook/YouTube/GitHub style). Stacks calls so
+// nested loads don't blink — we only hide once everything wraps up.
+let _progressDepth = 0;
+let _progressTimer = null;
+function ensureProgressEl() {
+  let el = document.getElementById("nd-progress");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "nd-progress";
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function progressStart() {
+  _progressDepth++;
+  const el = ensureProgressEl();
+  el.classList.remove("done");
+  requestAnimationFrame(() => {
+    el.classList.add("show");
+    setTimeout(() => el.classList.add("mid"), 200);
+    setTimeout(() => el.classList.add("almost"), 900);
+  });
+}
+function progressEnd() {
+  _progressDepth = Math.max(0, _progressDepth - 1);
+  if (_progressDepth > 0) return;
+  clearTimeout(_progressTimer);
+  const el = document.getElementById("nd-progress");
+  if (!el) return;
+  el.classList.add("done");
+  _progressTimer = setTimeout(() => {
+    el.classList.remove("show", "mid", "almost", "done");
+  }, 400);
+}
+async function withProgress(promise) {
+  progressStart();
+  try { return await promise; }
+  finally { progressEnd(); }
+}
+
+// Toggle a button's "loading" state — disables it and overlays a
+// spinner so users see that their click registered.
+function buttonLoading(btn, on) {
+  if (!btn) return;
+  if (on) {
+    btn.dataset._wasDisabled = btn.disabled ? "1" : "0";
+    btn.disabled = true;
+    btn.classList.add("loading");
+  } else {
+    btn.classList.remove("loading");
+    btn.disabled = btn.dataset._wasDisabled === "1";
+    delete btn.dataset._wasDisabled;
+  }
+}
+
+// Skeleton fillers for each list/grid we hydrate from the network.
+function skelDeck(stack) {
+  if (!stack) return;
+  stack.innerHTML = `
+    <article class="skeleton-card front">
+      <div class="skeleton sk-avatar"></div>
+      <div class="skeleton sk-line"></div>
+      <div class="skeleton sk-line short"></div>
+      <div class="skeleton sk-line tag"></div>
+    </article>`;
+}
+function skelMatches(grid, n = 6) {
+  if (!grid) return;
+  grid.innerHTML = Array.from({ length: n }).map(() => `
+    <div class="skeleton-tile">
+      <div class="skeleton sk-avatar"></div>
+      <div class="skeleton sk-line"></div>
+      <div class="skeleton sk-line short"></div>
+    </div>`).join("");
+}
+function skelSessionList(list, n = 5) {
+  if (!list) return;
+  list.innerHTML = Array.from({ length: n }).map(() => `
+    <div class="skeleton-row">
+      <div class="skeleton sk-avatar"></div>
+      <div class="sk-stack">
+        <div class="skeleton sk-line"></div>
+        <div class="skeleton sk-line short"></div>
+      </div>
+    </div>`).join("");
+}
+function skelMessages(body, n = 5) {
+  if (!body) return;
+  body.innerHTML = Array.from({ length: n }).map((_, i) => `
+    <div class="skeleton-bubble ${i % 2 ? "mine" : ""}">
+      <div class="skeleton sk-bubble" style="width:${120 + Math.round(Math.random() * 140)}px"></div>
+    </div>`).join("");
+}
+
 const state = {
   user: null,
   profile: null,
@@ -467,6 +562,7 @@ function initTheme() {
     setNavVisible(false);
     return navigate("auth");
   }
+  progressStart();
   try {
     const me = await api("/auth/me");
     await onSignedIn({ id: me.id, email: me.email });
@@ -475,6 +571,8 @@ function initTheme() {
     clearSession();
     setNavVisible(false);
     navigate("auth");
+  } finally {
+    progressEnd();
   }
 })();
 
@@ -591,11 +689,15 @@ function renderAuth(root) {
     const email = $("#email").value.trim();
     const password = $("#password").value;
     if (!email || !password) return toast("Enter email and password.");
+    const btn = $("#btn-login");
+    buttonLoading(btn, true);
+    progressStart();
     try {
       const res = await api("/auth/login", { method: "POST", body: { email, password }, auth: false });
       setSession(res.token, { id: res.user_id, email: res.email });
-      onSignedIn({ id: res.user_id, email: res.email });
+      await onSignedIn({ id: res.user_id, email: res.email });
     } catch (err) { toast(err.message); }
+    finally { buttonLoading(btn, false); progressEnd(); }
   };
 
   $("#btn-signup").onclick = async () => {
@@ -604,11 +706,15 @@ function renderAuth(root) {
     if (!email || !password) return toast("Enter email and password.");
     if (!isAluEmail(email)) return toast(`Email must end in ${EMAIL_DOMAINS.map((d) => "@" + d).join(" or ")}.`);
     if (password.length < 6) return toast("Password must be at least 6 characters.");
+    const btn = $("#btn-signup");
+    buttonLoading(btn, true);
+    progressStart();
     try {
       const res = await api("/auth/signup", { method: "POST", body: { email, password }, auth: false });
       setSession(res.token, { id: res.user_id, email: res.email });
-      onSignedIn({ id: res.user_id, email: res.email });
+      await onSignedIn({ id: res.user_id, email: res.email });
     } catch (err) { toast(err.message); }
+    finally { buttonLoading(btn, false); progressEnd(); }
   };
 }
 
@@ -688,30 +794,38 @@ function renderOnboarding(root) {
       return;
     }
 
-    // public.match_preferences.user_id and public.private_identities.user_id
-    // are foreign keys to public.profiles(id). On first-save the profiles
-    // row doesn't exist yet, so we must upsert it BEFORE the other two —
-    // otherwise the FK fires before the profile lands and Postgres rejects
-    // the dependent inserts with a 400.
-    const p1 = await supabase
-      .from("profiles")
-      .upsert(profilePayload, { onConflict: "id" })
-      .select()
-      .single();
-    if (p1.error) return toast(p1.error.message);
+    const btn = $("#save-profile");
+    buttonLoading(btn, true);
+    progressStart();
+    try {
+      // public.match_preferences.user_id and public.private_identities.user_id
+      // are foreign keys to public.profiles(id). On first-save the profiles
+      // row doesn't exist yet, so we must upsert it BEFORE the other two —
+      // otherwise the FK fires before the profile lands and Postgres rejects
+      // the dependent inserts with a 400.
+      const p1 = await supabase
+        .from("profiles")
+        .upsert(profilePayload, { onConflict: "id" })
+        .select()
+        .single();
+      if (p1.error) { toast(p1.error.message); return; }
 
-    const [p2, p3] = await Promise.all([
-      supabase.from("match_preferences").upsert(prefsPayload, { onConflict: "user_id" }).select().single(),
-      supabase.from("private_identities").upsert(privPayload, { onConflict: "user_id" }).select().single(),
-    ]);
-    const err = p2.error || p3.error;
-    if (err) return toast(err.message);
+      const [p2, p3] = await Promise.all([
+        supabase.from("match_preferences").upsert(prefsPayload, { onConflict: "user_id" }).select().single(),
+        supabase.from("private_identities").upsert(privPayload, { onConflict: "user_id" }).select().single(),
+      ]);
+      const err = p2.error || p3.error;
+      if (err) { toast(err.message); return; }
 
-    state.profile = p1.data;
-    state.prefs = p2.data;
-    state.privateIdentity = p3.data;
-    toast("Saved.");
-    navigate("discover");
+      state.profile = p1.data;
+      state.prefs = p2.data;
+      state.privateIdentity = p3.data;
+      toast("Saved.");
+      navigate("discover");
+    } finally {
+      buttonLoading(btn, false);
+      progressEnd();
+    }
   };
 }
 
@@ -764,7 +878,8 @@ function existingSessionPartners() {
 
 async function loadDiscover() {
   const stack = $("#swipe-stack");
-  stack.innerHTML = `<div class="swipe-empty">Finding compatible people…</div>`;
+  skelDeck(stack);
+  progressStart();
 
   let suggestions = [];
   if (DEMO_MODE) {
@@ -773,10 +888,12 @@ async function loadDiscover() {
     try {
       suggestions = await api(`/suggestions/${state.user.id}`);
     } catch (err) {
+      progressEnd();
       stack.innerHTML = `<div class="swipe-empty">Couldn't reach the matching engine.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
       return;
     }
   }
+  progressEnd();
 
   if (state.deck === null) {
     let skip;
@@ -1026,11 +1143,13 @@ function handleMutualMatch(user) {
 async function renderMatches(root) {
   root.append($("#tpl-matches").content.cloneNode(true));
   const grid = $("#matches-grid");
+  skelMatches(grid);
   const me = state.user?.id || DEMO_ME.id;
   let sessions = [];
   if (DEMO_MODE) {
     sessions = DEMO_SESSIONS.slice();
   } else {
+    progressStart();
     try {
       const { data, error } = await supabase
         .from("chat_sessions")
@@ -1041,7 +1160,7 @@ async function renderMatches(root) {
     } catch (err) {
       grid.innerHTML = `<div class="empty">Couldn't load matches.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
       return;
-    }
+    } finally { progressEnd(); }
   }
   if (!sessions.length) {
     grid.innerHTML = `
@@ -1452,7 +1571,7 @@ function filterSessions(query) {
 
 async function loadSessions() {
   const list = $("#session-list");
-  list.innerHTML = "";
+  skelSessionList(list);
 
   let data;
   if (DEMO_MODE) {
@@ -1460,12 +1579,14 @@ async function loadSessions() {
       (s) => s.user_a === state.user.id || s.user_b === state.user.id,
     );
   } else {
+    progressStart();
     const res = await supabase
       .from("chat_sessions")
       .select("*")
       .or(`user_a.eq.${state.user.id},user_b.eq.${state.user.id}`)
       .order("created_at", { ascending: false });
-    if (res.error) return toast(res.error.message);
+    progressEnd();
+    if (res.error) { list.innerHTML = ""; return toast(res.error.message); }
     data = res.data;
   }
   if (!data?.length) {
@@ -1624,20 +1745,23 @@ async function openSession(sessionId) {
 
 async function loadMessages(sessionId) {
   const body = $("#chat-body");
-  body.innerHTML = "";
+  skelMessages(body);
   body.dataset.lastDay = "";
   let data;
   if (DEMO_MODE) {
     data = (DEMO_MESSAGES[sessionId] || []).slice().sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
   } else {
+    progressStart();
     const res = await supabase
       .from("messages")
       .select("*")
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true });
-    if (res.error) return toast(res.error.message);
+    progressEnd();
+    if (res.error) { body.innerHTML = ""; return toast(res.error.message); }
     data = res.data;
   }
+  body.innerHTML = "";
   for (const m of data || []) appendMessage(m);
   body.scrollTop = body.scrollHeight;
 }
