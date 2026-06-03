@@ -627,16 +627,7 @@ function makeTagInput(container, initial) {
 async function renderDiscover(root) {
   root.append($("#tpl-discover").content.cloneNode(true));
   $("#refresh-discover").onclick = () => { state.deck = null; state.deckIndex = 0; loadDiscover(); };
-  $("#btn-pass").onclick = () => triggerAction("pass");
-  $("#btn-like").onclick = () => triggerAction("like");
   await loadDiscover();
-}
-
-function triggerAction(choice) {
-  const front = document.querySelector(".swipe-card.front");
-  if (choice === "like") return likeCurrent(front);
-  if (front) flyAndCycle(front, "next");
-  else cycle("next");
 }
 
 function existingSessionPartners() {
@@ -647,8 +638,9 @@ function existingSessionPartners() {
 }
 
 async function loadDiscover() {
+  const host = $("#swipe-empty-host");
   const stack = $("#swipe-stack");
-  const counter = $("#swipe-counter");
+  if (host) host.innerHTML = "";
   stack.innerHTML = `<div class="swipe-empty">Finding compatible people…</div>`;
 
   let suggestions = [];
@@ -658,8 +650,8 @@ async function loadDiscover() {
     try {
       suggestions = await api(`/suggestions/${state.user.id}`);
     } catch (err) {
-      stack.innerHTML = `<div class="swipe-empty">Couldn't reach the matching engine.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
-      counter.textContent = "";
+      stack.innerHTML = "";
+      if (host) host.innerHTML = `<div class="swipe-empty">Couldn't reach the matching engine.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
       return;
     }
   }
@@ -675,43 +667,39 @@ async function loadDiscover() {
 
 function renderDeck() {
   const stack = $("#swipe-stack");
-  const counter = $("#swipe-counter");
-  const controls = $("#swipe-actions");
+  const host = $("#swipe-empty-host");
   if (!stack) return;
   stack.innerHTML = "";
+  if (host) host.innerHTML = "";
 
   const total = state.deck?.length || 0;
   if (!total) {
-    counter.textContent = "0 of 0";
-    stack.innerHTML = `
+    if (host) host.innerHTML = `
       <div class="swipe-empty">
         <div class="swipe-empty-emoji">🌙</div>
         <h3>No profiles yet</h3>
         <p>Check back soon — fresh picks land regularly.</p>
       </div>`;
-    if (controls) controls.style.visibility = "hidden";
     return;
   }
 
-  if (controls) controls.style.visibility = "visible";
-
   // Normalize index in case it drifted out of bounds.
   state.deckIndex = ((state.deckIndex % total) + total) % total;
-  counter.textContent = `${state.deckIndex + 1} of ${total}`;
 
   // Render the next card (behind) and the current one (front) so the
   // deck looks like a stack and the "next" peeks through.
-  const nextIdx = (state.deckIndex + 1) % total;
-  const layers = [
-    { user: state.deck[nextIdx],         front: false },
-    { user: state.deck[state.deckIndex], front: true  },
-  ];
-  for (const { user, front } of layers) {
-    stack.appendChild(buildSwipeCard(user, front));
+  const layers = [];
+  if (total > 1) {
+    const nextIdx = (state.deckIndex + 1) % total;
+    layers.push({ user: state.deck[nextIdx], front: false, remaining: total - 1 });
+  }
+  layers.push({ user: state.deck[state.deckIndex], front: true, remaining: total });
+  for (const { user, front, remaining } of layers) {
+    stack.appendChild(buildSwipeCard(user, front, remaining));
   }
 }
 
-function buildSwipeCard(user, isFront) {
+function buildSwipeCard(user, isFront, remaining) {
   const card = document.createElement("article");
   card.className = "swipe-card" + (isFront ? " front" : " behind");
   card.dataset.uid = user.user_id;
@@ -719,28 +707,38 @@ function buildSwipeCard(user, isFront) {
   const meta = [user.gender, user.zodiac_sign].filter(Boolean).map(escapeHtml).join(" • ");
   const interests = (user.interests || []).slice(0, 4).map(escapeHtml);
   const hasInterests = interests.length > 0;
+  const remainingLabel = `${remaining} profile${remaining === 1 ? "" : "s"} remaining`;
 
   card.innerHTML = `
     <div class="swipe-hero">
-      <div class="swipe-avatar-frame">
-        <div class="swipe-avatar">${escapeHtml(user.avatar_url || "🦊")}</div>
-      </div>
+      <div class="swipe-avatar">${escapeHtml(user.avatar_url || "🧑")}</div>
     </div>
     <div class="swipe-body">
       <div class="swipe-name-row">
-        <div class="swipe-name">${escapeHtml(user.nickname)}</div>
+        <div class="swipe-name-block">
+          <div class="swipe-name">${escapeHtml(user.nickname)}</div>
+          <div class="swipe-meta">${meta || "—"}</div>
+        </div>
         <button class="swipe-info" type="button" aria-label="More info" aria-expanded="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
         </button>
       </div>
-      <div class="swipe-meta">${meta || "—"}</div>
       <div class="swipe-details" hidden>
         ${hasInterests ? `<div class="swipe-detail-row"><span class="swipe-detail-label">Into</span><div class="swipe-chips">${interests.map((i) => `<span class="swipe-chip">${i}</span>`).join("")}</div></div>` : ""}
         ${user.score != null ? `<div class="swipe-detail-row"><span class="swipe-detail-label">Vibe match</span><span class="swipe-score">${user.score}%</span></div>` : ""}
       </div>
+      <div class="swipe-actions">
+        <button class="swipe-btn pass" type="button" data-action="pass" aria-label="Pass">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <button class="swipe-btn like" type="button" data-action="like" aria-label="Like">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7-4.35-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.65-7 10-7 10z"/></svg>
+        </button>
+      </div>
+      <div class="swipe-counter">${remainingLabel}</div>
     </div>
     <div class="swipe-overlay like-overlay">LIKE</div>
-    <div class="swipe-overlay pass-overlay">PASS</div>
+    <div class="swipe-overlay pass-overlay">NOPE</div>
   `;
 
   const infoBtn = card.querySelector(".swipe-info");
@@ -752,7 +750,17 @@ function buildSwipeCard(user, isFront) {
     infoBtn.setAttribute("aria-expanded", String(open));
   });
 
-  if (isFront) attachSwipe(card);
+  if (isFront) {
+    card.querySelector('[data-action="pass"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      passCurrent(card);
+    });
+    card.querySelector('[data-action="like"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      likeCurrent(card);
+    });
+    attachSwipe(card);
+  }
   return card;
 }
 
@@ -761,7 +769,7 @@ function attachSwipe(card) {
   const threshold = 110;
 
   const onDown = (e) => {
-    if (e.target.closest(".swipe-info")) return;
+    if (e.target.closest(".swipe-info") || e.target.closest(".swipe-btn")) return;
     dragging = true;
     pointerId = e.pointerId;
     startX = e.clientX; startY = e.clientY; dx = 0; dy = 0;
@@ -784,7 +792,7 @@ function attachSwipe(card) {
     card.releasePointerCapture?.(pointerId);
     card.classList.remove("dragging");
     if (dx > threshold)      return likeCurrent(card);
-    if (dx < -threshold)     return flyAndCycle(card, "next");
+    if (dx < -threshold)     return passCurrent(card);
     card.style.transform = "";
     card.querySelector(".like-overlay").style.opacity = 0;
     card.querySelector(".pass-overlay").style.opacity = 0;
@@ -796,24 +804,19 @@ function attachSwipe(card) {
   card.addEventListener("pointercancel", onUp);
 }
 
-function flyAndCycle(card, dir) {
-  const sign = dir === "next" ? 1 : -1;
-  card.style.transition = "transform .28s ease, opacity .28s ease";
-  card.style.transform = `translate(${sign * 600}px, 80px) rotate(${sign * 24}deg)`;
+function flyAway(card, direction, after = advance) {
+  const sign = direction === "right" ? 1 : -1;
+  card.style.transition = "transform .3s ease-out, opacity .3s ease-out";
+  card.style.transform = `translate(${sign * 600}px, 60px) rotate(${sign * 22}deg)`;
   card.style.opacity = "0";
-  setTimeout(() => cycle(dir), 120);
+  setTimeout(after, 180);
 }
 
-function cycle(dir) {
-  const total = state.deck?.length || 0;
-  if (!total) return;
-  if (dir === "next") {
-    state.deckIndex = (state.deckIndex + 1) % total;
-    state.passed.add(state.deck[state.deckIndex - 1 < 0 ? total - 1 : state.deckIndex - 1].user_id);
-  } else {
-    state.deckIndex = (state.deckIndex - 1 + total) % total;
-  }
-  renderDeck();
+function passCurrent(card) {
+  const user = state.deck?.[state.deckIndex];
+  if (user) state.passed.add(user.user_id);
+  if (card) flyAway(card, "left");
+  else advance();
 }
 
 function likeCurrent(card) {
@@ -821,20 +824,14 @@ function likeCurrent(card) {
   if (!user) return;
   state.liked.add(user.user_id);
   if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
-  if (card) {
-    card.style.transition = "transform .14s ease-out, opacity .14s ease-out";
-    card.style.transform = "translate(600px, 80px) rotate(24deg)";
-    card.style.opacity = "0";
-    setTimeout(() => { advance(); }, 120);
-  } else {
-    advance();
-  }
+  if (card) flyAway(card, "right");
+  else advance();
 }
 
 function advance() {
-  const total = state.deck?.length || 0;
-  if (!total) return;
-  state.deckIndex = (state.deckIndex + 1) % total;
+  if (!state.deck?.length) return;
+  state.deck.splice(state.deckIndex, 1);
+  if (state.deckIndex >= state.deck.length) state.deckIndex = 0;
   renderDeck();
 }
 
