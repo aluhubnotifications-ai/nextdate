@@ -42,7 +42,6 @@ const DEMO_ME = {
     age: 21,
     country: "Rwanda",
     cohort: "BSc CS 2026",
-    whatsapp_number: "+250700000000",
   },
 };
 
@@ -50,77 +49,77 @@ const DEMO_USERS = [
   {
     user_id: "u-aisha", nickname: "NightOwl", avatar_url: "🦄",
     gender: "Woman", zodiac_sign: "Pisces", score: 94,
-    private: { real_name: "Aisha M.", age: 20, country: "Rwanda", cohort: "BSc Global Challenges 2026", whatsapp_number: "+250788111222" },
+    private: { real_name: "Aisha M.", age: 20, country: "Rwanda", cohort: "BSc Global Challenges 2026" },
   },
   {
     user_id: "u-kofi", nickname: "JollofKing", avatar_url: "🦁",
     gender: "Man", zodiac_sign: "Leo", score: 88,
-    private: { real_name: "Kofi A.", age: 22, country: "Ghana", cohort: "BSc IBT 2025", whatsapp_number: "+233244555666" },
+    private: { real_name: "Kofi A.", age: 22, country: "Ghana", cohort: "BSc IBT 2025" },
   },
   {
     user_id: "u-thandi", nickname: "Bloom", avatar_url: "🌸",
     gender: "Woman", zodiac_sign: "Libra", score: 82,
-    private: { real_name: "Thandi N.", age: 21, country: "South Africa", cohort: "BSc Entrepreneurial Leadership 2026", whatsapp_number: "+27821234567" },
+    private: { real_name: "Thandi N.", age: 21, country: "South Africa", cohort: "BSc Entrepreneurial Leadership 2026" },
   },
   {
     user_id: "u-david", nickname: "OctoCoder", avatar_url: "🐙",
     gender: "Man", zodiac_sign: "Virgo", score: 79,
-    private: { real_name: "David O.", age: 23, country: "Kenya", cohort: "BSc CS 2025", whatsapp_number: "+254700111222" },
+    private: { real_name: "David O.", age: 23, country: "Kenya", cohort: "BSc CS 2025" },
   },
   {
     user_id: "u-zara", nickname: "BeeKween", avatar_url: "🐝",
     gender: "Non-binary", zodiac_sign: "Gemini", score: 76,
-    private: { real_name: "Zara K.", age: 20, country: "Zambia", cohort: "BSc Global Challenges 2027", whatsapp_number: "+260977333444" },
+    private: { real_name: "Zara K.", age: 20, country: "Zambia", cohort: "BSc Global Challenges 2027" },
   },
   {
     user_id: "u-marcus", nickname: "Tortuga", avatar_url: "🐢",
     gender: "Man", zodiac_sign: "Cancer", score: 71,
-    private: { real_name: "Marcus B.", age: 24, country: "Tanzania", cohort: "BSc IBT 2024", whatsapp_number: "+255712999888" },
+    private: { real_name: "Marcus B.", age: 24, country: "Tanzania", cohort: "BSc IBT 2024" },
   },
   {
     user_id: "u-lily", nickname: "PandaVibes", avatar_url: "🐼",
     gender: "Woman", zodiac_sign: "Taurus", score: 68,
-    private: { real_name: "Lily W.", age: 19, country: "Rwanda", cohort: "BSc CS 2027", whatsapp_number: "+250788777888" },
+    private: { real_name: "Lily W.", age: 19, country: "Rwanda", cohort: "BSc CS 2027" },
   },
   {
     user_id: "u-nia", nickname: "MoonChild", avatar_url: "🌙",
     gender: "Woman", zodiac_sign: "Scorpio", score: 91,
-    private: { real_name: "Nia O.", age: 22, country: "Kenya", cohort: "BSc Entrepreneurial Leadership 2025", whatsapp_number: "+254712345678" },
+    private: { real_name: "Nia O.", age: 22, country: "Kenya", cohort: "BSc Entrepreneurial Leadership 2025" },
   },
   {
     user_id: "u-emeka", nickname: "PixelDealer", avatar_url: "🎮",
     gender: "Man", zodiac_sign: "Aquarius", score: 84,
-    private: { real_name: "Emeka I.", age: 21, country: "Nigeria", cohort: "BSc CS 2026", whatsapp_number: "+2348023456789" },
+    private: { real_name: "Emeka I.", age: 21, country: "Nigeria", cohort: "BSc CS 2026" },
   },
   {
     user_id: "u-sade", nickname: "CoffeeSnob", avatar_url: "☕",
     gender: "Woman", zodiac_sign: "Capricorn", score: 80,
-    private: { real_name: "Sade A.", age: 23, country: "Nigeria", cohort: "BSc IBT 2024", whatsapp_number: "+2348134567890" },
+    private: { real_name: "Sade A.", age: 23, country: "Nigeria", cohort: "BSc IBT 2024" },
   },
   {
     user_id: "u-jamal", nickname: "TrailRunner", avatar_url: "🏃",
     gender: "Man", zodiac_sign: "Sagittarius", score: 77,
-    private: { real_name: "Jamal K.", age: 22, country: "Kenya", cohort: "BSc Global Challenges 2025", whatsapp_number: "+254723456789" },
+    private: { real_name: "Jamal K.", age: 22, country: "Kenya", cohort: "BSc Global Challenges 2025" },
   },
   {
     user_id: "u-amara", nickname: "InkAndChai", avatar_url: "📚",
     gender: "Woman", zodiac_sign: "Aries", score: 73,
-    private: { real_name: "Amara D.", age: 20, country: "Rwanda", cohort: "BSc Entrepreneurial Leadership 2027", whatsapp_number: "+250788234567" },
+    private: { real_name: "Amara D.", age: 20, country: "Rwanda", cohort: "BSc Entrepreneurial Leadership 2027" },
   },
   {
     user_id: "u-leo", nickname: "JazzNerd", avatar_url: "🎷",
     gender: "Man", zodiac_sign: "Pisces", score: 70,
-    private: { real_name: "Leo M.", age: 24, country: "Ghana", cohort: "BSc CS 2024", whatsapp_number: "+233503456789" },
+    private: { real_name: "Leo M.", age: 24, country: "Ghana", cohort: "BSc CS 2024" },
   },
   {
     user_id: "u-rita", nickname: "Sunbeam", avatar_url: "🌻",
     gender: "Woman", zodiac_sign: "Leo", score: 66,
-    private: { real_name: "Rita W.", age: 19, country: "South Africa", cohort: "BSc Global Challenges 2027", whatsapp_number: "+27834567890" },
+    private: { real_name: "Rita W.", age: 19, country: "South Africa", cohort: "BSc Global Challenges 2027" },
   },
   {
     user_id: "u-zane", nickname: "DesertFox", avatar_url: "🌵",
     gender: "Non-binary", zodiac_sign: "Virgo", score: 63,
-    private: { real_name: "Zane R.", age: 22, country: "Namibia", cohort: "BSc IBT 2026", whatsapp_number: "+264811234567" },
+    private: { real_name: "Zane R.", age: 22, country: "Namibia", cohort: "BSc IBT 2026" },
   },
 ];
 
@@ -847,9 +846,34 @@ function likeCurrent(card) {
   const user = state.deck?.[state.deckIndex];
   if (!user) return;
   state.liked.add(user.user_id);
-  if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
+
+  if (DEMO_MODE) {
+    if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
+  } else {
+    // Persist the like and let Postgres tell us if it's a mutual match.
+    // `like_user` returns the chat_sessions id when both sides have liked,
+    // otherwise null. The card flies away immediately for snappy UX.
+    supabase.rpc("like_user", { target: user.user_id }).then(({ data, error }) => {
+      if (error) return toast(error.message);
+      if (data) handleMutualMatchReal(user, data);
+    });
+  }
+
   if (card) flyAway(card, "right");
   else advance();
+}
+
+function handleMutualMatchReal(user, sessionId) {
+  state.notifications.unshift({
+    id: `n-${Date.now()}`,
+    icon: "💖", kind: "match",
+    title: `It's a match — ${user.nickname}`,
+    text: `You both liked each other. Say hi when you're ready.`,
+    time: "just now", group: "today", unread: true,
+    session_id: sessionId,
+  });
+  refreshBadges();
+  toast(`💖 It's a match with ${user.nickname}!`);
 }
 
 function advance() {
@@ -1144,8 +1168,13 @@ function onInfoAction(act) {
         icon: "🧹",
         okLabel: "Clear chat",
         okClass: "warn",
-        onConfirm: () => {
-          if (DEMO_MODE) DEMO_MESSAGES[s.id] = [];
+        onConfirm: async () => {
+          if (DEMO_MODE) {
+            DEMO_MESSAGES[s.id] = [];
+          } else {
+            const { error } = await supabase.from("messages").delete().eq("session_id", s.id);
+            if (error) return toast(error.message);
+          }
           loadMessages(s.id);
           toast("Chat cleared.");
         },
@@ -1158,11 +1187,15 @@ function onInfoAction(act) {
         icon: "🗑️",
         okLabel: "Delete forever",
         okClass: "danger",
-        onConfirm: () => {
+        onConfirm: async () => {
           if (DEMO_MODE) {
             const i = DEMO_SESSIONS.findIndex((x) => x.id === s.id);
             if (i >= 0) DEMO_SESSIONS.splice(i, 1);
             delete DEMO_MESSAGES[s.id];
+          } else {
+            // chat_sessions cascade-deletes its messages on the FK.
+            const { error } = await supabase.from("chat_sessions").delete().eq("id", s.id);
+            if (error) return toast(error.message);
           }
           closeInfoPanel();
           closeActiveChat();
@@ -1816,15 +1849,26 @@ function toggleReaction(msg, emoji) {
   if (list.length) msg.reactions[emoji] = list;
   else delete msg.reactions[emoji];
   refreshMessage(msg);
+  if (!DEMO_MODE) {
+    supabase.from("messages")
+      .update({ reactions: msg.reactions })
+      .eq("id", msg.id)
+      .then(({ error }) => { if (error) toast(error.message); });
+  }
 }
 
 function deleteMessage(msg) {
   if (!msg || !state.activeSession) return;
   if (msg.sender_id !== state.user?.id) return toast("You can only delete your own messages.");
-  const arr = DEMO_MESSAGES[state.activeSession.id];
-  if (arr) {
-    const i = arr.findIndex((x) => x.id === msg.id);
-    if (i >= 0) arr.splice(i, 1);
+  if (DEMO_MODE) {
+    const arr = DEMO_MESSAGES[state.activeSession.id];
+    if (arr) {
+      const i = arr.findIndex((x) => x.id === msg.id);
+      if (i >= 0) arr.splice(i, 1);
+    }
+  } else {
+    supabase.from("messages").delete().eq("id", msg.id)
+      .then(({ error }) => { if (error) toast(error.message); });
   }
   // If we were replying to this, clear the reply target.
   if (state.replyTo?.id === msg.id) clearReplyTarget();
