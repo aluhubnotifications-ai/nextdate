@@ -7,7 +7,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const SUPABASE_URL      = "https://wkdamyjswlixzkwehxyc.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR-SUPABASE-ANON-KEY";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZGFteWpzd2xpeHprd2VoeHljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzgyNTksImV4cCI6MjA5NTkxNDI1OX0.8CuPl4ZhLwZ2MPW6DUnuRNcZKQyzpw-SLdg6C8KYxcg";
 const BACKEND_URL       = "https://nextdate-5may.onrender.com";
 const EMAIL_DOMAINS     = ["alustudent.com", "aluedu.org"];
 
