@@ -1505,6 +1505,9 @@ function appendMessage(m) {
       ${formatClock(m.created_at) ? `<span class="bubble-time">${escapeHtml(formatClock(m.created_at))}</span>` : ""}
       ${renderReactions(m)}
     </div>
+    <button class="bubble-more" type="button" aria-label="Message actions">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+    </button>
   `;
   body.appendChild(row);
   attachBubbleInteractions(row, m);
@@ -1567,6 +1570,12 @@ function attachBubbleInteractions(row, msg) {
       target.classList.add("flash");
       setTimeout(() => target.classList.remove("flash"), 1400);
     }
+  });
+
+  // Explicit kebab button → action menu
+  row.querySelector(".bubble-more")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openMessageMenu(row, msg);
   });
 
   // Long-press / right-click → action menu

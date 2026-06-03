@@ -848,6 +848,31 @@ textarea { min-height: 88px; resize: vertical; }
   30%      { box-shadow: 0 0 0 4px var(--brand-rose), 0 12px 28px var(--brand-glow); }
 }
 
+.bubble-more {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  opacity: 0;
+  transition: opacity .15s ease, background .15s ease, color .15s ease;
+}
+.bubble-more svg { width: 14px; height: 14px; }
+.bubble-more:hover { background: var(--brand-soft); color: var(--brand-rose); }
+.bubble-row:hover .bubble-more,
+.bubble-row.active-menu .bubble-more { opacity: 1; }
+.bubble-row.mine .bubble-more { order: -2; }
+@media (hover: none), (max-width: 760px) {
+  .bubble-more { opacity: 0.7; }
+  .bubble-more:hover { opacity: 1; }
+}
+
 .swipe-reply-hint {
   position: absolute;
   top: 50%;
