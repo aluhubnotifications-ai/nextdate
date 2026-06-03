@@ -492,7 +492,58 @@ async function onSignedIn(user) {
   if (!state.profile || !state.prefs) {
     return navigate("onboarding");
   }
+  subscribeMatchNotifications();
   navigate("discover");
+}
+
+// ---------- match notifications (real-mode only) ----------
+// Both sides of a mutual match end up with a new chat_sessions row. The
+// liker already announces it via handleMutualMatchReal; the OTHER user
+// learns about it through this subscription so they get a toast +
+// notification in real time instead of having to refresh the Matches tab.
+let matchChannel = null;
+function subscribeMatchNotifications() {
+  if (DEMO_MODE || !supabase || !state.user) return;
+  if (matchChannel) { supabase.removeChannel(matchChannel); matchChannel = null; }
+  const me = state.user.id;
+  matchChannel = supabase
+    .channel(`matches:${me}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "chat_sessions", filter: `user_a=eq.${me}` },
+      onMatchInsert,
+    )
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "chat_sessions", filter: `user_b=eq.${me}` },
+      onMatchInsert,
+    )
+    .subscribe();
+}
+
+async function onMatchInsert(payload) {
+  const session = payload.new;
+  if (!session || !state.user) return;
+  // Dedup: the liker already announced this locally.
+  if (state.notifications.some((n) => n.session_id === session.id)) return;
+  const me = state.user.id;
+  const peerId = session.user_a === me ? session.user_b : session.user_a;
+  const { data: peer } = await supabase
+    .from("profiles")
+    .select("id, nickname, avatar_url")
+    .eq("id", peerId)
+    .maybeSingle();
+  const name = peer?.nickname || "someone new";
+  state.notifications.unshift({
+    id: `n-${Date.now()}`,
+    icon: "💖", kind: "match",
+    title: `It's a match — ${name}`,
+    text: `You both liked each other. Say hi when you're ready.`,
+    time: "just now", group: "today", unread: true,
+    session_id: session.id,
+  });
+  refreshBadges();
+  toast(`💖 New match with ${name}!`);
 }
 
 // ---------- AUTH ----------
@@ -529,6 +580,7 @@ function renderAuth(root) {
 
 async function doLogout() {
   if (DEMO_MODE) { toast("Demo mode — no real session to sign out of."); return; }
+  if (matchChannel) { supabase.removeChannel(matchChannel); matchChannel = null; }
   clearSession();
   state.user = null;
   setNavVisible(false);
@@ -682,7 +734,27 @@ async function loadDiscover() {
   }
 
   if (state.deck === null) {
-    const skip = DEMO_MODE ? existingSessionPartners() : new Set();
+    let skip;
+    if (DEMO_MODE) {
+      skip = existingSessionPartners();
+    } else {
+      // Drop everyone you've already matched with, plus anyone you've
+      // already liked (they'll either come back as a match notification
+      // or stay queued until they like you).
+      skip = new Set();
+      const me = state.user.id;
+      const [sessRes, likeRes] = await Promise.all([
+        supabase
+          .from("chat_sessions")
+          .select("user_a, user_b")
+          .or(`user_a.eq.${me},user_b.eq.${me}`),
+        supabase.from("likes").select("likee").eq("liker", me),
+      ]);
+      for (const s of sessRes.data || []) {
+        skip.add(s.user_a === me ? s.user_b : s.user_a);
+      }
+      for (const l of likeRes.data || []) skip.add(l.likee);
+    }
     state.deck = suggestions.filter((s) => !skip.has(s.user_id));
     state.deckIndex = 0;
   }

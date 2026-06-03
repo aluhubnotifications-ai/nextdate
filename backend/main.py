@@ -287,8 +287,15 @@ def get_curated_suggestions(
         .in_("id", ordered_ids)
         .execute()
     )
+    tags_q = (
+        db.table("match_preferences")
+        .select("user_id, interests, hobbies")
+        .in_("user_id", ordered_ids)
+        .execute()
+    )
 
     by_id: dict[str, Profile] = {p["id"]: Profile(**p) for p in (profiles_q.data or [])}
+    tags_by_id: dict[str, dict] = {t["user_id"]: t for t in (tags_q.data or [])}
 
     return [
         SuggestionResponse(
@@ -297,6 +304,8 @@ def get_curated_suggestions(
             avatar_url=by_id[uid].avatar_url,
             gender=by_id[uid].gender,
             zodiac_sign=by_id[uid].zodiac_sign,
+            interests=(tags_by_id.get(uid) or {}).get("interests") or [],
+            hobbies=(tags_by_id.get(uid) or {}).get("hobbies") or [],
             score=score,
         )
         for uid, score in ordered

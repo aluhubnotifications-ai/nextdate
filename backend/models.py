@@ -113,4 +113,6 @@ class SuggestionResponse(BaseModel):
     avatar_url: Optional[str] = None
     gender: Optional[str] = None
     zodiac_sign: Optional[str] = None
+    interests: List[str] = Field(default_factory=list)
+    hobbies: List[str] = Field(default_factory=list)
     score: float = 0.0
