@@ -2314,3 +2314,53 @@ textarea { min-height: 88px; resize: vertical; }
   .swipe-btn.like  { width: 58px; height: 58px; }
   .match-avatar    { width: 64px; height: 64px; font-size: 30px; }
 }
+
+/* ============================================================
+   COPYRIGHT FOOTERS
+   Sidebar footer pinned at the bottom of the desktop sidebar /
+   mobile drawer; mobile-footer rendered inline at the end of
+   every padded view on phones.
+   ============================================================ */
+.sidebar-footer {
+  margin-top: auto;
+  padding: 14px 6px 4px;
+  border-top: 1px solid var(--border);
+}
+.sidebar-footer .copyright {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-align: center;
+  letter-spacing: 0.15px;
+  line-height: 1.4;
+}
+
+.mobile-footer {
+  display: none;
+  margin-top: 22px;
+  padding: 14px 8px 6px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 1180px) {
+  .sidebar-footer .copyright { font-size: 0; line-height: 0; }
+  .sidebar-footer .copyright::before {
+    content: "© 2026";
+    font-size: 10px;
+    line-height: 1.4;
+  }
+}
+
+@media (max-width: 760px) {
+  .sidebar-footer .copyright { font-size: 11px; line-height: 1.4; }
+  .sidebar-footer .copyright::before { content: none; }
+  .mobile-footer { display: block; }
+}
+
+[data-theme="light"] .mobile-footer { color: rgba(0, 0, 0, 0.55); border-top-color: rgba(0, 0, 0, 0.08); }
