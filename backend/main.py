@@ -129,55 +129,6 @@ def email_domain_ok(email: str) -> bool:
     return any(e.endswith("@" + d) for d in ALLOWED_EMAIL_DOMAINS)
 
 
-# ---------- embedding model (lazy) ----------
-# `all-MiniLM-L6-v2` is Apache-2.0, ~80 MB on disk, 384-dim output. We load it
-# on first use (not import) so cold-start auth requests aren't blocked by the
-# weight download, and so a backend that never serves /suggestions doesn't pay
-# the ~200 MB resident cost.
-_embedder = None
-
-
-def get_embedder():
-    global _embedder
-    if _embedder is None:
-        from sentence_transformers import SentenceTransformer
-
-        _embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-    return _embedder
-
-
-def prefs_to_doc(prefs: "MatchPreferences") -> str:
-    interests = ", ".join(prefs.interests) if prefs.interests else "—"
-    hobbies = ", ".join(prefs.hobbies) if prefs.hobbies else "—"
-    leisure = prefs.leisure_time or "—"
-    wants = prefs.wants_in_relationship or "—"
-    return (
-        f"Looking for {prefs.target_intent} ({prefs.term_length}). "
-        f"Interests: {interests}. Hobbies: {hobbies}. "
-        f"Free time: {leisure}. In a partner: {wants}."
-    )
-
-
-def embed_prefs(prefs: "MatchPreferences") -> list[float]:
-    return get_embedder().encode(prefs_to_doc(prefs)).tolist()
-
-
-def ensure_embedding(db: Client, uid: str, prefs: "MatchPreferences") -> None:
-    """Compute + persist an embedding for `uid` if the row doesn't have one."""
-    row = (
-        db.table("match_preferences")
-        .select("embedding")
-        .eq("user_id", uid)
-        .limit(1)
-        .execute()
-    )
-    if row.data and row.data[0].get("embedding") is not None:
-        return
-    db.table("match_preferences").update({"embedding": embed_prefs(prefs)}).eq(
-        "user_id", uid
-    ).execute()
-
-
 # ---------- routes ----------
 @app.get("/healthz")
 def healthz():
@@ -246,41 +197,38 @@ def get_curated_suggestions(
 
     prefs = MatchPreferences(**pref_rows.data[0])
 
-    # Embeddings are CACHED on the row. We only ever compute one for users
-    # whose `embedding` is null — either brand-new accounts, or rows whose
-    # prefs the user just edited (the trigger in 20260603000002 sets
-    # embedding back to null on a real change). Existing cached vectors are
-    # never recomputed here, so a new signup doesn't invalidate anyone else.
-
-    # 1. Make sure the caller is embedded so the RPC has a query vector.
-    ensure_embedding(db, user_id, prefs)
-
-    # 2. Embed eligible candidates that are still null. Bounded to keep
-    #    a single request cheap; whatever doesn't fit this batch gets
-    #    picked up on the next /suggestions call.
-    stale = (
+    # Lightweight matcher: filter on intent+term, then score by overlap
+    # on interests (2x) and hobbies (1x). The pgvector column and
+    # match_candidates RPC are still there in the DB for when the
+    # backend can afford a real embedding model — this path just
+    # doesn't use them, so the worker stays well under Render's
+    # free-tier memory ceiling.
+    candidates_q = (
         db.table("match_preferences")
-        .select("user_id, target_intent, term_length, interests, hobbies, leisure_time, wants_in_relationship")
+        .select("user_id, interests, hobbies")
         .eq("target_intent", prefs.target_intent)
         .eq("term_length", prefs.term_length)
-        .is_("embedding", "null")
-        .neq("user_id", user_id)
-        .limit(20)
         .execute()
     )
-    for row in stale.data or []:
-        cand_prefs = MatchPreferences(**row)
-        db.table("match_preferences").update(
-            {"embedding": embed_prefs(cand_prefs)}
-        ).eq("user_id", row["user_id"]).execute()
 
-    # 3. Postgres does the ranking against all cached vectors via pgvector.
-    ranked = db.rpc("match_candidates", {"me": user_id, "k": 50}).execute()
-    ordered = [(r["user_id"], float(r["score"])) for r in (ranked.data or [])]
-    if not ordered:
+    rows = [r for r in (candidates_q.data or []) if r["user_id"] != user_id]
+    if not rows:
         return []
 
+    my_interests = set(prefs.interests)
+    my_hobbies = set(prefs.hobbies)
+
+    scored: list[tuple[float, str]] = []
+    for r in rows:
+        s = 0.0
+        s += 2 * len(my_interests.intersection(set(r.get("interests") or [])))
+        s += 1 * len(my_hobbies.intersection(set(r.get("hobbies") or [])))
+        scored.append((s, r["user_id"]))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    ordered = [(uid, s) for s, uid in scored]
     ordered_ids = [uid for uid, _ in ordered]
+
     profiles_q = (
         db.table("profiles")
         .select("id, email, nickname, avatar_url, gender, zodiac_sign")
