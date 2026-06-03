@@ -307,6 +307,14 @@ async function navigate(name) {
   );
   closeDrawer();
   await views[name](root);
+  // Append a small mobile-only copyright footer to every view except
+  // the flush chat view (which has no padded bottom area).
+  if (name !== "chats") {
+    const footer = document.createElement("div");
+    footer.className = "mobile-footer";
+    footer.innerHTML = `&copy; 2026 NextDate. All rights reserved.`;
+    root.appendChild(footer);
+  }
 }
 
 document.querySelectorAll("[data-view]").forEach((b) =>
