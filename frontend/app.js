@@ -1783,24 +1783,30 @@ function buildNotifNode(n) {
 function renderProfile(root) {
   root.append($("#tpl-profile").content.cloneNode(true));
   const p = state.profile, pr = state.prefs, pi = state.privateIdentity;
+  const metaBits = [p?.gender, p?.zodiac_sign].filter(Boolean).map(escapeHtml).join(" · ") || "—";
+  $("#profile-avatar").textContent = p?.avatar_url || "🦊";
+  $("#profile-name").textContent = p?.nickname || "—";
+  $("#profile-tagline").textContent = metaBits;
   $("#profile-summary").innerHTML = `
-    <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
-      <div class="avatar" style="width:64px; height:64px; font-size:26px;">${escapeHtml(p?.avatar_url || "🦊")}</div>
-      <div>
-        <div style="font-weight:700; font-size:18px;">${escapeHtml(p?.nickname || "—")}</div>
-        <div class="muted" style="font-size:13px;">${escapeHtml(p?.gender || "—")} · ${escapeHtml(p?.zodiac_sign || "—")}</div>
+    <div class="profile-section">
+      <div class="profile-section-label">Looking for</div>
+      <div class="profile-rows">
+        <div class="identity-row"><span>Intent</span><span>${escapeHtml(pr?.target_intent || "—")}</span></div>
+        <div class="identity-row"><span>Term</span><span>${escapeHtml(pr?.term_length || "—")}</span></div>
+        <div class="identity-row"><span>Interests</span><span>${(pr?.interests || []).map(escapeHtml).join(", ") || "—"}</span></div>
+        <div class="identity-row"><span>Hobbies</span><span>${(pr?.hobbies || []).map(escapeHtml).join(", ") || "—"}</span></div>
       </div>
     </div>
-    <div class="identity-row"><span>Looking for</span><span>${escapeHtml(pr?.target_intent || "—")} · ${escapeHtml(pr?.term_length || "—")}</span></div>
-    <div class="identity-row"><span>Interests</span><span>${(pr?.interests || []).map(escapeHtml).join(", ") || "—"}</span></div>
-    <div class="identity-row"><span>Hobbies</span><span>${(pr?.hobbies || []).map(escapeHtml).join(", ") || "—"}</span></div>
-    <div class="hr"></div>
-    <div class="muted" style="font-size:12px;">Private (only you can see this)</div>
-    <div class="identity-row"><span>Real name</span><span>${escapeHtml(pi?.real_name || "—")}</span></div>
-    <div class="identity-row"><span>Age</span><span>${pi?.age ?? "—"}</span></div>
-    <div class="identity-row"><span>Country</span><span>${escapeHtml(pi?.country || "—")}</span></div>
-    <div class="identity-row"><span>Cohort</span><span>${escapeHtml(pi?.cohort || "—")}</span></div>
-    <div class="identity-row"><span>WhatsApp</span><span>${escapeHtml(pi?.whatsapp_number || "—")}</span></div>
+    <div class="profile-section">
+      <div class="profile-section-label">Private <span class="profile-section-sub">— only you can see this</span></div>
+      <div class="profile-rows">
+        <div class="identity-row"><span>Real name</span><span>${escapeHtml(pi?.real_name || "—")}</span></div>
+        <div class="identity-row"><span>Age</span><span>${pi?.age ?? "—"}</span></div>
+        <div class="identity-row"><span>Country</span><span>${escapeHtml(pi?.country || "—")}</span></div>
+        <div class="identity-row"><span>Cohort</span><span>${escapeHtml(pi?.cohort || "—")}</span></div>
+        <div class="identity-row"><span>WhatsApp</span><span>${escapeHtml(pi?.whatsapp_number || "—")}</span></div>
+      </div>
+    </div>
   `;
   $("#edit-profile").onclick = () => navigate("onboarding");
   $("#profile-logout").onclick = () => doLogout();
