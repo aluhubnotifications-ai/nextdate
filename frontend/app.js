@@ -557,7 +557,6 @@ function renderOnboarding(root) {
     $("#age").value              = state.privateIdentity.age || "";
     $("#country").value          = state.privateIdentity.country || "";
     $("#cohort").value           = state.privateIdentity.cohort || "";
-    $("#whatsapp_number").value  = state.privateIdentity.whatsapp_number || "";
   }
 
   const interests = makeTagInput($("#interests-input"), state.prefs?.interests || []);
@@ -590,7 +589,6 @@ function renderOnboarding(root) {
       age: $("#age").value ? Number($("#age").value) : null,
       country: $("#country").value || null,
       cohort: $("#cohort").value || null,
-      whatsapp_number: $("#whatsapp_number").value || null,
     };
 
     if (DEMO_MODE) {
@@ -977,6 +975,9 @@ async function renderChats(root) {
   $("#emoji-btn").onclick = openEmojiModal;
   $("#attach-btn").onclick = () => $("#file-input").click();
   $("#file-input").addEventListener("change", onFilesPicked);
+  $("#mic-btn")?.addEventListener("click", startRecording);
+  $("#recording-cancel")?.addEventListener("click", cancelRecording);
+  $("#recording-send")?.addEventListener("click", stopAndSendRecording);
 
   // Info panel
   $("#info-btn")?.addEventListener("click", openInfoPanel);
@@ -1566,6 +1567,46 @@ function attachBubbleInteractions(row, msg) {
   const bubble = row.querySelector(".bubble");
   if (!bubble) return;
 
+  // Voice message play/pause + progress
+  bubble.querySelectorAll(".bubble-voice").forEach((wrap) => {
+    const audio = wrap.querySelector("audio");
+    const btn = wrap.querySelector(".bubble-voice-play");
+    const timeEl = wrap.querySelector(".bubble-voice-time");
+    const iconPlay = btn.querySelector(".icon-play");
+    const iconPause = btn.querySelector(".icon-pause");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      // Pause any other playing voice message first.
+      document.querySelectorAll(".bubble-voice audio").forEach((a) => {
+        if (a !== audio && !a.paused) a.pause();
+      });
+      if (audio.paused) audio.play().catch(() => toast("Couldn't play this audio."));
+      else audio.pause();
+    });
+    const sync = () => {
+      const playing = !audio.paused && !audio.ended;
+      iconPlay.classList.toggle("hidden", playing);
+      iconPause.classList.toggle("hidden", !playing);
+      wrap.classList.toggle("playing", playing);
+      if (audio.currentTime && audio.duration) {
+        const pct = Math.min(100, (audio.currentTime / audio.duration) * 100);
+        wrap.style.setProperty("--voice-progress", pct + "%");
+      } else {
+        wrap.style.setProperty("--voice-progress", "0%");
+      }
+      if (timeEl) {
+        const rem = audio.paused || audio.ended
+          ? (audio.duration && isFinite(audio.duration) ? audio.duration : 0)
+          : audio.currentTime;
+        timeEl.textContent = fmtDuration(rem);
+      }
+    };
+    audio.addEventListener("play", sync);
+    audio.addEventListener("pause", sync);
+    audio.addEventListener("timeupdate", sync);
+    audio.addEventListener("ended", () => { audio.currentTime = 0; sync(); });
+  });
+
   // Reaction chip click → toggle that reaction off/on
   row.querySelectorAll(".reaction-chip").forEach((chip) => {
     chip.addEventListener("click", (e) => {
@@ -1866,7 +1907,17 @@ function renderBubbleAttachments(atts) {
   if (!atts || !atts.length) return "";
   let html = `<div class="bubble-attachments">`;
   for (const a of atts) {
-    if (a.preview && (a.type || "").startsWith("image/")) {
+    if (a.kind === "voice" || (a.audio_src && (a.type || "").startsWith("audio/"))) {
+      html += `<div class="bubble-voice">
+        <audio src="${a.audio_src}" preload="metadata"></audio>
+        <button class="bubble-voice-play" type="button" aria-label="Play voice message">
+          <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+          <svg class="icon-pause hidden" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </button>
+        <span class="bubble-voice-bars" aria-hidden="true">${Array.from({ length: 22 }).map((_, i) => `<i style="height:${20 + Math.abs(Math.sin(i * 1.6)) * 70}%"></i>`).join("")}</span>
+        <span class="bubble-voice-time">${fmtDuration(a.duration)}</span>
+      </div>`;
+    } else if (a.preview && (a.type || "").startsWith("image/")) {
       html += `<div class="bubble-attachment-image"><img src="${a.preview}" alt="${escapeHtml(a.name)}"/></div>`;
     } else {
       html += `<div class="bubble-attachment">
@@ -1880,6 +1931,147 @@ function renderBubbleAttachments(atts) {
   }
   html += `</div>`;
   return html;
+}
+
+// ---------- voice messages ----------
+const recording = { recorder: null, stream: null, chunks: [], startedAt: 0, timer: null };
+
+async function startRecording() {
+  if (recording.recorder) return; // already recording
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    return toast("Voice messages aren't supported on this device.");
+  }
+  try {
+    recording.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    return toast(err.name === "NotAllowedError"
+      ? "Microphone access denied."
+      : "Couldn't start the microphone.");
+  }
+  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"]
+    .find((t) => MediaRecorder.isTypeSupported(t)) || "";
+  try {
+    recording.recorder = new MediaRecorder(recording.stream, mime ? { mimeType: mime } : undefined);
+  } catch {
+    cleanupRecording();
+    return toast("Couldn't start the recorder.");
+  }
+  recording.chunks = [];
+  recording.startedAt = Date.now();
+  recording.recorder.ondataavailable = (e) => { if (e.data?.size) recording.chunks.push(e.data); };
+  recording.recorder.start();
+  showRecordingBar();
+}
+
+function showRecordingBar() {
+  const bar = $("#recording-bar");
+  bar?.classList.remove("hidden");
+  $(".composer-row")?.classList.add("recording");
+  const timeEl = $("#recording-time");
+  recording.timer = setInterval(() => {
+    if (!timeEl) return;
+    const secs = Math.floor((Date.now() - recording.startedAt) / 1000);
+    const mm = Math.floor(secs / 60);
+    const ss = String(secs % 60).padStart(2, "0");
+    timeEl.textContent = `${mm}:${ss}`;
+    // Hard cap at 5 minutes — stop and send.
+    if (secs >= 300) stopAndSendRecording();
+  }, 200);
+}
+
+function hideRecordingBar() {
+  $("#recording-bar")?.classList.add("hidden");
+  $(".composer-row")?.classList.remove("recording");
+  const timeEl = $("#recording-time");
+  if (timeEl) timeEl.textContent = "0:00";
+  if (recording.timer) { clearInterval(recording.timer); recording.timer = null; }
+}
+
+function cleanupRecording() {
+  hideRecordingBar();
+  recording.stream?.getTracks().forEach((t) => t.stop());
+  recording.recorder = null;
+  recording.stream = null;
+  recording.chunks = [];
+  recording.startedAt = 0;
+}
+
+function cancelRecording() {
+  if (!recording.recorder) return;
+  try { recording.recorder.stop(); } catch {}
+  // Don't send; just drop the chunks.
+  recording.recorder.onstop = () => cleanupRecording();
+  // Override stop handler set in start; we still need a small wait so
+  // ondataavailable can fire before tracks are torn down.
+  setTimeout(cleanupRecording, 50);
+}
+
+function stopAndSendRecording() {
+  if (!recording.recorder) return;
+  const duration = Math.max(1, Math.round((Date.now() - recording.startedAt) / 1000));
+  const rec = recording.recorder;
+  rec.onstop = async () => {
+    const mime = rec.mimeType || "audio/webm";
+    const blob = new Blob(recording.chunks, { type: mime });
+    cleanupRecording();
+    if (!blob.size) return toast("Empty recording, try again.");
+    const dataUrl = await blobToDataUrl(blob);
+    sendVoiceMessage({ dataUrl, mime, duration, size: blob.size });
+  };
+  try { rec.stop(); } catch { cleanupRecording(); }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+async function sendVoiceMessage({ dataUrl, mime, duration, size }) {
+  if (!state.activeSession) return;
+  const sessionId = state.activeSession.id;
+  const replyToId = state.replyTo?.id || null;
+  clearReplyTarget();
+  const attachment = {
+    name: `voice-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}.${mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm"}`,
+    type: mime,
+    size,
+    duration,
+    audio_src: dataUrl,
+    kind: "voice",
+  };
+  if (DEMO_MODE) {
+    const msg = {
+      id: `m-${Date.now()}`,
+      session_id: sessionId,
+      sender_id: state.user.id,
+      body: "",
+      attachments: [attachment],
+      reply_to_id: replyToId,
+      created_at: new Date().toISOString(),
+    };
+    (DEMO_MESSAGES[sessionId] ||= []).push(msg);
+    appendMessage(msg);
+    showTyping();
+    setTimeout(() => { hideTyping(); simulateDemoReply(sessionId); }, 1100 + Math.random() * 900);
+    return;
+  }
+  const { error } = await supabase.from("messages").insert({
+    session_id: sessionId,
+    sender_id: state.user.id,
+    body: "",
+    attachments: [attachment],
+    reply_to_id: replyToId,
+  });
+  if (error) toast(error.message);
+}
+
+function fmtDuration(secs) {
+  const s = Math.max(0, Math.round(secs || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 async function sendMessage() {
@@ -2093,15 +2285,11 @@ async function hydrateIdentity() {
     panel.innerHTML = `<div class="muted">No private identity on file for this user yet.</div>`;
     return;
   }
-  const wa = id.whatsapp_number
-    ? `<a href="https://wa.me/${encodeURIComponent(String(id.whatsapp_number).replace(/[^\d+]/g, ""))}" target="_blank" rel="noopener">${escapeHtml(id.whatsapp_number)}</a>`
-    : `<span class="muted">—</span>`;
   panel.innerHTML = `
     <div class="identity-row"><span>Real name</span><span>${escapeHtml(id.real_name || "—")}</span></div>
     <div class="identity-row"><span>Age</span><span>${id.age ?? "—"}</span></div>
     <div class="identity-row"><span>Country</span><span>${escapeHtml(id.country || "—")}</span></div>
     <div class="identity-row"><span>Cohort</span><span>${escapeHtml(id.cohort || "—")}</span></div>
-    <div class="identity-row"><span>WhatsApp</span><span>${wa}</span></div>
   `;
 }
 
@@ -2232,7 +2420,6 @@ function renderProfile(root) {
         <div class="identity-row"><span>Age</span><span>${pi?.age ?? "—"}</span></div>
         <div class="identity-row"><span>Country</span><span>${escapeHtml(pi?.country || "—")}</span></div>
         <div class="identity-row"><span>Cohort</span><span>${escapeHtml(pi?.cohort || "—")}</span></div>
-        <div class="identity-row"><span>WhatsApp</span><span>${escapeHtml(pi?.whatsapp_number || "—")}</span></div>
       </div>
     </div>
   `;

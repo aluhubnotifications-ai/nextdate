@@ -314,7 +314,6 @@
             </select>
           </div>
           <div class="field"><label>Cohort</label><input id="cohort" placeholder="e.g. BSc CS 2026" /></div>
-          <div class="field"><label>WhatsApp number</label><input id="whatsapp_number" placeholder="+250…" /></div>
         </div>
       </div>
 
@@ -405,6 +404,19 @@
           <div id="chat-body" class="chat-body"></div>
           <div class="composer">
             <div class="composer-attachments hidden" id="composer-attachments"></div>
+            <div class="recording-bar hidden" id="recording-bar">
+              <button class="recording-cancel" id="recording-cancel" type="button" aria-label="Cancel recording">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+              <span class="recording-pulse" aria-hidden="true"></span>
+              <span class="recording-wave" aria-hidden="true">
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </span>
+              <span class="recording-time" id="recording-time">0:00</span>
+              <button class="recording-send" id="recording-send" type="button" aria-label="Send recording">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
             <div class="composer-row">
               <div class="composer-actions">
                 <button class="composer-btn" id="emoji-btn" type="button" aria-label="Insert emoji" title="Emoji">
@@ -416,6 +428,9 @@
                 <input type="file" id="file-input" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" hidden />
               </div>
               <textarea id="msg-input" placeholder="Message…" rows="1" autocomplete="off"></textarea>
+              <button class="composer-btn" id="mic-btn" type="button" aria-label="Record voice message" title="Record voice message">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              </button>
               <button class="btn send-btn" id="send-btn" aria-label="Send">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>

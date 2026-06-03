@@ -1232,6 +1232,166 @@ textarea { min-height: 88px; resize: vertical; }
 }
 .composer .send-btn svg { width: 22px; height: 22px; }
 
+/* Voice recording bar (sits above the composer row while recording) */
+.recording-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.recording-cancel,
+.recording-send {
+  background: transparent;
+  border: 0;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  color: var(--text);
+  transition: background .15s ease, color .15s ease, transform .12s ease;
+}
+.recording-cancel { color: var(--danger); }
+.recording-cancel:hover { background: rgba(230, 76, 102, 0.15); }
+.recording-send {
+  background: var(--brand-grad);
+  color: #FFFFFF;
+  box-shadow: 0 6px 14px var(--brand-glow);
+}
+.recording-send:hover { transform: scale(1.05); }
+.recording-cancel svg, .recording-send svg { width: 18px; height: 18px; }
+.recording-pulse {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 0 rgba(230, 76, 102, 0.55);
+  animation: rec-pulse 1.1s ease-out infinite;
+  flex-shrink: 0;
+}
+@keyframes rec-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(230, 76, 102, 0.65); }
+  70%  { box-shadow: 0 0 0 10px rgba(230, 76, 102, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(230, 76, 102, 0); }
+}
+.recording-wave {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  overflow: hidden;
+}
+.recording-wave i {
+  display: inline-block;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--brand-rose);
+  animation: rec-wave 0.9s ease-in-out infinite alternate;
+}
+.recording-wave i:nth-child(1)  { animation-delay: 0s;    height: 30%; }
+.recording-wave i:nth-child(2)  { animation-delay: .08s;  height: 60%; }
+.recording-wave i:nth-child(3)  { animation-delay: .16s;  height: 80%; }
+.recording-wave i:nth-child(4)  { animation-delay: .24s;  height: 50%; }
+.recording-wave i:nth-child(5)  { animation-delay: .32s;  height: 90%; }
+.recording-wave i:nth-child(6)  { animation-delay: .40s;  height: 40%; }
+.recording-wave i:nth-child(7)  { animation-delay: .48s;  height: 70%; }
+.recording-wave i:nth-child(8)  { animation-delay: .56s;  height: 55%; }
+.recording-wave i:nth-child(9)  { animation-delay: .64s;  height: 30%; }
+.recording-wave i:nth-child(10) { animation-delay: .72s;  height: 65%; }
+@keyframes rec-wave {
+  from { transform: scaleY(0.4); }
+  to   { transform: scaleY(1.2); }
+}
+.recording-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--text);
+  flex-shrink: 0;
+  min-width: 42px;
+  text-align: right;
+}
+
+/* Voice message bubble */
+.bubble-voice {
+  --voice-progress: 0%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 4px 2px;
+  min-width: 180px;
+}
+.bubble-voice audio { display: none; }
+.bubble-voice-play {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 0;
+  color: #FFFFFF;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background .15s ease, transform .12s ease;
+}
+.bubble:not(.mine) .bubble-voice-play {
+  background: var(--brand-grad);
+  color: #FFFFFF;
+  box-shadow: 0 4px 10px var(--brand-glow);
+}
+.bubble-voice-play:hover { transform: scale(1.05); }
+.bubble-voice-play svg { width: 16px; height: 16px; }
+.bubble-voice-play svg.icon-play { margin-left: 2px; } /* optical centring */
+.bubble-voice-bars {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  position: relative;
+  --voice-progress: 0%;
+}
+.bubble-voice { position: relative; }
+.bubble-voice-bars i {
+  display: inline-block;
+  width: 2.5px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+.bubble-voice.playing .bubble-voice-bars i { animation: voice-bars-shift 1.2s ease-in-out infinite; }
+@keyframes voice-bars-shift {
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(1.18); }
+}
+/* Progress fill over the bars */
+.bubble-voice-bars::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, currentColor var(--voice-progress), transparent var(--voice-progress));
+  mix-blend-mode: lighten;
+  opacity: 0.55;
+  pointer-events: none;
+  border-radius: 4px;
+}
+.bubble-voice-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
 @media (max-width: 760px) {
   .composer { padding: 10px 12px 12px; gap: 8px; }
   .composer-row { gap: 6px; }
@@ -1241,6 +1401,11 @@ textarea { min-height: 88px; resize: vertical; }
   .composer .send-btn { width: 44px; height: 44px; }
   .composer .send-btn svg { width: 18px; height: 18px; }
   .composer textarea { padding: 11px 16px; }
+  .recording-bar { padding: 6px 10px; gap: 8px; }
+  .recording-cancel, .recording-send { width: 32px; height: 32px; }
+  .recording-cancel svg, .recording-send svg { width: 16px; height: 16px; }
+  .bubble-voice { min-width: 160px; }
+  .bubble-voice-play { width: 34px; height: 34px; }
 }
 
 /* Emoji grid (used inside modal) */
