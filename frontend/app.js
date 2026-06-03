@@ -1090,11 +1090,13 @@ function openInfoPanel() {
   paintInfoPanel();
   panel.classList.add("open");
   panel.setAttribute("aria-hidden", "false");
+  $("#chat-shell")?.classList.add("show-info");
 }
 function closeInfoPanel() {
   const panel = $("#chat-info-panel");
   panel?.classList.remove("open");
   panel?.setAttribute("aria-hidden", "true");
+  $("#chat-shell")?.classList.remove("show-info");
 }
 
 function paintInfoPanel() {
@@ -1498,11 +1500,13 @@ function appendMessage(m) {
     <div class="swipe-reply-hint" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
     </div>
-    <div class="bubble ${mine ? "mine" : ""}">
-      ${renderReplyQuote(m)}
-      ${renderBubbleAttachments(m.attachments)}
-      ${m.body ? `<span class="bubble-text">${escapeHtml(m.body)}</span>` : ""}
-      ${formatClock(m.created_at) ? `<span class="bubble-time">${escapeHtml(formatClock(m.created_at))}</span>` : ""}
+    <div class="bubble-stack">
+      <div class="bubble ${mine ? "mine" : ""}">
+        ${renderReplyQuote(m)}
+        ${renderBubbleAttachments(m.attachments)}
+        ${m.body ? `<span class="bubble-text">${escapeHtml(m.body)}</span>` : ""}
+        ${formatClock(m.created_at) ? `<span class="bubble-time">${escapeHtml(formatClock(m.created_at))}</span>` : ""}
+      </div>
       ${renderReactions(m)}
     </div>
     <button class="bubble-more" type="button" aria-label="Message actions">
@@ -1748,12 +1752,11 @@ function deleteMessage(msg) {
 function refreshMessage(msg) {
   const row = document.querySelector(`.bubble-row[data-msg-id="${msg.id}"]`);
   if (!row) return;
-  const bubble = row.querySelector(".bubble");
-  const old = bubble.querySelector(".bubble-reactions");
-  if (old) old.remove();
+  const stack = row.querySelector(".bubble-stack");
+  stack.querySelector(":scope > .bubble-reactions")?.remove();
   const next = renderReactions(msg);
-  if (next) bubble.insertAdjacentHTML("beforeend", next);
-  bubble.querySelectorAll(".reaction-chip").forEach((chip) => {
+  if (next) stack.insertAdjacentHTML("beforeend", next);
+  stack.querySelectorAll(".reaction-chip").forEach((chip) => {
     chip.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleReaction(msg, chip.dataset.emoji);
