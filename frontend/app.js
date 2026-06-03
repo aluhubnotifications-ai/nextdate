@@ -803,19 +803,28 @@ function renderOnboarding(root) {
       // row doesn't exist yet, so we must upsert it BEFORE the other two —
       // otherwise the FK fires before the profile lands and Postgres rejects
       // the dependent inserts with a 400.
+      const showPgError = (label, err) => {
+        console.error(`[${label}] PostgREST error`, err);
+        const parts = [err.message];
+        if (err.code) parts.push(`code ${err.code}`);
+        if (err.details) parts.push(err.details);
+        if (err.hint) parts.push(`hint: ${err.hint}`);
+        toast(parts.join(" — "));
+      };
+
       const p1 = await supabase
         .from("profiles")
         .upsert(profilePayload, { onConflict: "id" })
         .select()
         .single();
-      if (p1.error) { toast(p1.error.message); return; }
+      if (p1.error) { showPgError("profiles", p1.error); return; }
 
       const [p2, p3] = await Promise.all([
         supabase.from("match_preferences").upsert(prefsPayload, { onConflict: "user_id" }).select().single(),
         supabase.from("private_identities").upsert(privPayload, { onConflict: "user_id" }).select().single(),
       ]);
-      const err = p2.error || p3.error;
-      if (err) { toast(err.message); return; }
+      if (p2.error) { showPgError("match_preferences", p2.error); return; }
+      if (p3.error) { showPgError("private_identities", p3.error); return; }
 
       state.profile = p1.data;
       state.prefs = p2.data;
