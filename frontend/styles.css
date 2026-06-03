@@ -2914,3 +2914,13 @@ textarea { min-height: 88px; resize: vertical; }
   -webkit-text-fill-color: transparent;
   font-weight: 800;
 }
+
+/* Auth + onboarding: hide all chrome so only the form is visible. */
+html.auth-view .app-sidebar,
+html.auth-view .mobile-topbar,
+html.auth-view .bottom-tabs,
+html.auth-view .sidebar-backdrop {
+  display: none !important;
+}
+html.auth-view .app-shell { grid-template-columns: 1fr; }
+html.auth-view .app-main  { margin: 0; padding: 0; width: 100%; }

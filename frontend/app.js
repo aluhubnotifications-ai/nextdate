@@ -305,6 +305,9 @@ async function navigate(name) {
   // The chat-open flag (used to hide the bottom nav inside a conversation)
   // is only valid while the chats view is mounted.
   if (name !== "chats") document.documentElement.classList.remove("chat-open");
+  // On auth/onboarding screens we hide the whole chrome (sidebar,
+  // mobile top bar, bottom tabs) so the only thing visible is the form.
+  document.documentElement.classList.toggle("auth-view", name === "auth" || name === "onboarding");
   document.querySelectorAll("[data-view]").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === name),
   );
