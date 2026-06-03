@@ -2,17 +2,13 @@
 -- NextDate — consolidated migration to bring an existing DB up to
 -- date with the current `main` branch in one shot.
 --
--- This concatenates the four migrations added in the embedding +
--- realtime-notifications work, plus a defensive re-apply of the
--- country column from migration 20260602000001 (in case it never
--- landed) and a final NOTIFY so PostgREST reloads its schema cache.
---
 --   0. add private_identities.country if missing
 --   1. 20260603000001_embedding_matching.sql
 --   2. 20260603000002_invalidate_embedding_on_edit.sql
 --   3. 20260603000003_align_to_frontend.sql
 --   4. 20260603000004_notifications.sql
---   5. notify pgrst, 'reload schema'
+--   5. 20260603000005_one_sided_matches.sql
+--   6. notify pgrst, 'reload schema'
 --
 -- Every statement is idempotent (IF NOT EXISTS / CREATE OR REPLACE /
 -- DROP TRIGGER IF EXISTS), so it's safe to re-run.
@@ -467,6 +463,62 @@ drop trigger if exists trg_notify_reveal on public.chat_sessions;
 create trigger trg_notify_reveal
   after update on public.chat_sessions
   for each row execute function public.notify_on_reveal();
+
+-- ============================================================
+-- 20260603000005_one_sided_matches.sql
+-- ============================================================
+-- ============================================================
+-- One-sided matches.
+--
+-- like_user used to insert the like, then only open a chat_session
+-- if the other side had already liked back. The product decision now
+-- is: any single like opens the match for both people. The reciprocity
+-- check goes away.
+--
+-- We still write to public.likes so we have a record (and the
+-- discover deck still filters out anyone you've already liked).
+-- chat_sessions's unique (user_a, user_b) + ON CONFLICT keeps the
+-- single canonical row per pair, so liking the same person twice is
+-- a no-op.
+-- ============================================================
+
+create or replace function public.like_user(target uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me  uuid := auth.uid();
+  lo  uuid;
+  hi  uuid;
+  sid uuid;
+begin
+  if me is null then
+    raise exception 'not authenticated';
+  end if;
+  if me = target then
+    raise exception 'cannot like yourself';
+  end if;
+
+  insert into public.likes(liker, likee) values (me, target)
+    on conflict do nothing;
+
+  if me < target then
+    lo := me;    hi := target;
+  else
+    lo := target; hi := me;
+  end if;
+
+  insert into public.chat_sessions(user_a, user_b)
+  values (lo, hi)
+  on conflict (user_a, user_b) do update set user_a = excluded.user_a
+  returning id into sid;
+
+  return sid;
+end$$;
+
+notify pgrst, 'reload schema';
 
 -- ============================================================
 -- Tell PostgREST to refresh its schema cache so columns added /

@@ -676,6 +676,13 @@ function onNotificationInsert(payload) {
   state.notifications.unshift(n);
   refreshBadges();
   if (document.getElementById("notifications-list")) paintNotifications();
+
+  // New match or new message → refresh the chat sidebar so the new
+  // row / updated preview shows up without the user having to
+  // navigate away. Matches grid refresh happens on next nav.
+  if ((n.kind === "match" || n.kind === "message") && document.getElementById("session-list")) {
+    loadSessions();
+  }
 }
 
 // ---------- AUTH ----------
@@ -1705,12 +1712,27 @@ async function openSession(sessionId) {
       ? { id: u.user_id, nickname: u.nickname, avatar_url: u.avatar_url, gender: u.gender, zodiac_sign: u.zodiac_sign }
       : { id: peerId, nickname: "Unknown", avatar_url: "🦊", gender: "", zodiac_sign: "" };
   } else {
-    const res = await supabase.from("chat_sessions").select("*").eq("id", sessionId).single();
+    const res = await supabase.from("chat_sessions").select("*").eq("id", sessionId).maybeSingle();
     if (res.error) return toast(res.error.message);
+    if (!res.data) {
+      // The conversation no longer exists (deleted on the other side or
+      // notification points to a stale id). Drop the stale notification
+      // and refresh the list instead of leaving the user staring at a
+      // half-loaded chat.
+      state.notifications = state.notifications.filter((n) => n.session_id !== sessionId);
+      refreshBadges();
+      await loadSessions();
+      return toast("That conversation isn't available anymore.");
+    }
     s = res.data;
     const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
-    const pRes = await supabase.from("profiles").select("id, nickname, avatar_url, gender, zodiac_sign").eq("id", peerId).single();
-    peer = pRes.data;
+    const pRes = await supabase
+      .from("profiles")
+      .select("id, nickname, avatar_url, gender, zodiac_sign")
+      .eq("id", peerId)
+      .maybeSingle();
+    if (pRes.error) return toast(pRes.error.message);
+    peer = pRes.data || { id: peerId, nickname: "Unknown", avatar_url: "🦊", gender: "", zodiac_sign: "" };
   }
 
   const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
