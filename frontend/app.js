@@ -272,6 +272,7 @@ const state = {
   passed: new Set(),
   deck: null,
   deckIndex: 0,
+  replyTo: null,
 };
 
 // In DEMO mode, treat these users as already-liking-you-back, so
@@ -1280,6 +1281,8 @@ function closeActiveChat() {
   $("#chat-empty")?.classList.remove("hidden");
   $("#chat-active")?.classList.add("hidden");
   $$(".session-item").forEach((el) => el.classList.remove("active"));
+  closeMessageMenu();
+  clearReplyTarget();
 }
 
 function filterSessions(query) {
@@ -1436,7 +1439,8 @@ async function openSession(sessionId) {
   $("#peer-name").textContent = peer.nickname;
   const metaParts = [peer.gender, peer.zodiac_sign].filter(Boolean).map(escapeHtml).join(" · ");
   $("#peer-meta").innerHTML = `<span class="online"></span> Active now${metaParts ? " · " + metaParts : ""}`;
-  $("#peer-session-id").textContent = `#${sessionId.slice(0, 8)}`;
+  const sidEl = $("#peer-session-id");
+  if (sidEl) sidEl.textContent = `#${sessionId.slice(0, 8)}`;
 
   // Mark associated unread message notifications as read
   let touched = false;
@@ -1486,15 +1490,323 @@ function appendMessage(m) {
     body.dataset.lastDay = dayLabel;
   }
 
-  const el = document.createElement("div");
-  el.className = "bubble " + (m.sender_id === state.user.id ? "mine" : "");
-  const time = formatClock(m.created_at);
-  const attachmentsHtml = renderBubbleAttachments(m.attachments);
-  const textHtml = m.body ? escapeHtml(m.body) : "";
-  el.innerHTML = `${attachmentsHtml}${textHtml}${time ? `<span class="bubble-time">${escapeHtml(time)}</span>` : ""}`;
-  body.appendChild(el);
+  const row = document.createElement("div");
+  const mine = m.sender_id === state.user?.id;
+  row.className = "bubble-row" + (mine ? " mine" : "");
+  row.dataset.msgId = m.id;
+  row.innerHTML = `
+    <div class="swipe-reply-hint" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+    </div>
+    <div class="bubble ${mine ? "mine" : ""}">
+      ${renderReplyQuote(m)}
+      ${renderBubbleAttachments(m.attachments)}
+      ${m.body ? `<span class="bubble-text">${escapeHtml(m.body)}</span>` : ""}
+      ${formatClock(m.created_at) ? `<span class="bubble-time">${escapeHtml(formatClock(m.created_at))}</span>` : ""}
+      ${renderReactions(m)}
+    </div>
+  `;
+  body.appendChild(row);
+  attachBubbleInteractions(row, m);
   body.scrollTop = body.scrollHeight;
 }
+
+function findMessage(sessionId, msgId) {
+  return (DEMO_MESSAGES[sessionId] || []).find((x) => x.id === msgId);
+}
+
+function renderReplyQuote(m) {
+  if (!m.reply_to_id) return "";
+  const target = findMessage(m.session_id, m.reply_to_id);
+  if (!target) {
+    return `<div class="bubble-quote bubble-quote-missing">Original message unavailable</div>`;
+  }
+  const peer = target.sender_id === state.user?.id
+    ? "You"
+    : (demoPeer(target.sender_id).nickname || "Them");
+  const snippet = (target.body || (target.attachments?.length ? "📎 Attachment" : "")).slice(0, 80);
+  return `
+    <button class="bubble-quote" data-quote-id="${escapeHtml(target.id)}">
+      <span class="bubble-quote-author">${escapeHtml(peer)}</span>
+      <span class="bubble-quote-text">${escapeHtml(snippet)}</span>
+    </button>`;
+}
+
+function renderReactions(m) {
+  const reactions = m.reactions || {};
+  const entries = Object.entries(reactions).filter(([, ids]) => ids?.length);
+  if (!entries.length) return "";
+  const chips = entries.map(([emoji, ids]) => {
+    const mine = ids.includes(state.user?.id);
+    return `<button class="reaction-chip ${mine ? "mine" : ""}" data-emoji="${escapeHtml(emoji)}">${escapeHtml(emoji)}${ids.length > 1 ? `<span class="reaction-count">${ids.length}</span>` : ""}</button>`;
+  }).join("");
+  return `<div class="bubble-reactions">${chips}</div>`;
+}
+
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
+function attachBubbleInteractions(row, msg) {
+  const bubble = row.querySelector(".bubble");
+  if (!bubble) return;
+
+  // Reaction chip click → toggle that reaction off/on
+  row.querySelectorAll(".reaction-chip").forEach((chip) => {
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleReaction(msg, chip.dataset.emoji);
+    });
+  });
+
+  // Reply quote click → scroll the original into view
+  row.querySelector(".bubble-quote")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const id = e.currentTarget.dataset.quoteId;
+    const target = document.querySelector(`.bubble-row[data-msg-id="${id}"]`);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add("flash");
+      setTimeout(() => target.classList.remove("flash"), 1400);
+    }
+  });
+
+  // Long-press / right-click → action menu
+  let lpTimer = null;
+  const cancelLP = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+  bubble.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 && e.pointerType !== "touch") return;
+    cancelLP();
+    lpTimer = setTimeout(() => { lpTimer = null; openMessageMenu(row, msg); }, 420);
+  });
+  ["pointerup", "pointermove", "pointercancel", "pointerleave"].forEach((ev) =>
+    bubble.addEventListener(ev, cancelLP),
+  );
+  bubble.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    openMessageMenu(row, msg);
+  });
+
+  // Swipe → set as reply target
+  attachSwipeToReply(row, msg);
+}
+
+function attachSwipeToReply(row, msg) {
+  let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false, locked = null;
+  const threshold = 64;
+  const bubble = row.querySelector(".bubble");
+  const hint = row.querySelector(".swipe-reply-hint");
+  // For "mine" we swipe leftward (toward centre); for "theirs" rightward.
+  const dir = row.classList.contains("mine") ? -1 : 1;
+
+  const onDown = (e) => {
+    if (e.target.closest(".reaction-chip, .bubble-quote")) return;
+    dragging = true; locked = null;
+    startX = e.clientX; startY = e.clientY; dx = 0; dy = 0;
+  };
+  const onMove = (e) => {
+    if (!dragging) return;
+    dx = e.clientX - startX;
+    dy = e.clientY - startY;
+    if (locked === null) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+        locked = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      } else return;
+    }
+    if (locked !== "x") return;
+    const along = dx * dir; // positive when moving toward centre
+    if (along <= 0) {
+      bubble.style.transform = "";
+      if (hint) { hint.style.opacity = ""; hint.style.transform = ""; }
+      return;
+    }
+    const offset = Math.min(120, along);
+    bubble.style.transform = `translateX(${offset * dir}px)`;
+    if (hint) {
+      hint.style.opacity = Math.min(1, offset / threshold);
+      hint.style.transform = `scale(${0.6 + Math.min(0.4, offset / 200)})`;
+    }
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    const along = dx * dir;
+    const triggered = locked === "x" && along >= threshold;
+    bubble.style.transition = "transform .18s ease-out";
+    bubble.style.transform = "";
+    if (hint) {
+      hint.style.transition = "opacity .18s ease-out, transform .18s ease-out";
+      hint.style.opacity = "";
+      hint.style.transform = "";
+    }
+    setTimeout(() => {
+      bubble.style.transition = "";
+      if (hint) hint.style.transition = "";
+    }, 200);
+    if (triggered) setReplyTarget(msg);
+  };
+
+  bubble.addEventListener("pointerdown", onDown);
+  bubble.addEventListener("pointermove", onMove);
+  bubble.addEventListener("pointerup", onUp);
+  bubble.addEventListener("pointercancel", onUp);
+}
+
+function openMessageMenu(row, msg) {
+  closeMessageMenu();
+  const mine = msg.sender_id === state.user?.id;
+  const overlay = document.createElement("div");
+  overlay.className = "msg-menu-overlay";
+  overlay.innerHTML = `
+    <div class="msg-menu-sheet" role="menu">
+      <div class="msg-menu-reactions">
+        ${QUICK_REACTIONS.map((e) => `<button class="msg-menu-react" data-emoji="${escapeHtml(e)}" aria-label="React with ${escapeHtml(e)}">${escapeHtml(e)}</button>`).join("")}
+      </div>
+      <div class="msg-menu-actions">
+        <button class="msg-menu-action" data-act="reply">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+          <span>Reply</span>
+        </button>
+        ${msg.body ? `
+        <button class="msg-menu-action" data-act="copy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>Copy</span>
+        </button>` : ""}
+        ${mine ? `
+        <button class="msg-menu-action danger" data-act="delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          <span>Delete</span>
+        </button>` : ""}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = () => closeMessageMenu();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  overlay.querySelectorAll(".msg-menu-react").forEach((b) => {
+    b.addEventListener("click", () => { toggleReaction(msg, b.dataset.emoji); close(); });
+  });
+  overlay.querySelectorAll(".msg-menu-action").forEach((b) => {
+    b.addEventListener("click", () => {
+      const act = b.dataset.act;
+      close();
+      if (act === "reply") setReplyTarget(msg);
+      else if (act === "copy") copyText(msg.body || "");
+      else if (act === "delete") deleteMessage(msg);
+    });
+  });
+
+  // Briefly highlight the bubble being acted on.
+  row.classList.add("active-menu");
+  overlay.dataset.activeRow = msg.id;
+}
+
+function closeMessageMenu() {
+  const open = document.querySelector(".msg-menu-overlay");
+  if (!open) return;
+  const rowId = open.dataset.activeRow;
+  document.querySelector(`.bubble-row[data-msg-id="${rowId}"]`)?.classList.remove("active-menu");
+  open.remove();
+}
+
+function toggleReaction(msg, emoji) {
+  if (!msg || !emoji) return;
+  msg.reactions = msg.reactions || {};
+  const me = state.user?.id;
+  const list = msg.reactions[emoji] || [];
+  const i = list.indexOf(me);
+  if (i >= 0) list.splice(i, 1);
+  else list.push(me);
+  if (list.length) msg.reactions[emoji] = list;
+  else delete msg.reactions[emoji];
+  refreshMessage(msg);
+}
+
+function deleteMessage(msg) {
+  if (!msg || !state.activeSession) return;
+  if (msg.sender_id !== state.user?.id) return toast("You can only delete your own messages.");
+  const arr = DEMO_MESSAGES[state.activeSession.id];
+  if (arr) {
+    const i = arr.findIndex((x) => x.id === msg.id);
+    if (i >= 0) arr.splice(i, 1);
+  }
+  // If we were replying to this, clear the reply target.
+  if (state.replyTo?.id === msg.id) clearReplyTarget();
+  document.querySelector(`.bubble-row[data-msg-id="${msg.id}"]`)?.remove();
+  toast("Message deleted");
+}
+
+function refreshMessage(msg) {
+  const row = document.querySelector(`.bubble-row[data-msg-id="${msg.id}"]`);
+  if (!row) return;
+  const bubble = row.querySelector(".bubble");
+  const old = bubble.querySelector(".bubble-reactions");
+  if (old) old.remove();
+  const next = renderReactions(msg);
+  if (next) bubble.insertAdjacentHTML("beforeend", next);
+  bubble.querySelectorAll(".reaction-chip").forEach((chip) => {
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleReaction(msg, chip.dataset.emoji);
+    });
+  });
+}
+
+function setReplyTarget(msg) {
+  if (!msg) return;
+  state.replyTo = msg;
+  const peer = msg.sender_id === state.user?.id
+    ? "yourself"
+    : (demoPeer(msg.sender_id).nickname || "them");
+  const snippet = (msg.body || (msg.attachments?.length ? "📎 Attachment" : "")).slice(0, 90);
+  let chip = $("#reply-chip");
+  if (!chip) {
+    chip = document.createElement("div");
+    chip.id = "reply-chip";
+    chip.className = "reply-chip";
+    chip.innerHTML = `
+      <div class="reply-chip-bar"></div>
+      <div class="reply-chip-body">
+        <div class="reply-chip-author"></div>
+        <div class="reply-chip-text"></div>
+      </div>
+      <button class="reply-chip-close" aria-label="Cancel reply" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+    $(".composer")?.prepend(chip);
+    chip.querySelector(".reply-chip-close").addEventListener("click", clearReplyTarget);
+  }
+  chip.querySelector(".reply-chip-author").textContent = `Replying to ${peer}`;
+  chip.querySelector(".reply-chip-text").textContent = snippet || "(no text)";
+  $("#msg-input")?.focus();
+}
+
+function clearReplyTarget() {
+  state.replyTo = null;
+  $("#reply-chip")?.remove();
+}
+
+function copyText(text) {
+  if (!text) return;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => toast("Copied"),
+      () => toast("Couldn't copy"),
+    );
+  } else {
+    const t = document.createElement("textarea");
+    t.value = text; document.body.appendChild(t); t.select();
+    try { document.execCommand("copy"); toast("Copied"); } catch { toast("Couldn't copy"); }
+    t.remove();
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (document.querySelector(".msg-menu-overlay")) { closeMessageMenu(); return; }
+    if (state.replyTo) clearReplyTarget();
+  }
+});
 
 function renderBubbleAttachments(atts) {
   if (!atts || !atts.length) return "";
@@ -1527,6 +1839,9 @@ async function sendMessage() {
   autoGrowTextarea();
   const sessionId = state.activeSession.id;
 
+  const replyToId = state.replyTo?.id || null;
+  clearReplyTarget();
+
   if (DEMO_MODE) {
     const msg = {
       id: `m-${Date.now()}`,
@@ -1534,6 +1849,7 @@ async function sendMessage() {
       sender_id: state.user.id,
       body,
       attachments,
+      reply_to_id: replyToId,
       created_at: new Date().toISOString(),
     };
     (DEMO_MESSAGES[sessionId] ||= []).push(msg);
@@ -1547,6 +1863,7 @@ async function sendMessage() {
     session_id: sessionId,
     sender_id: state.user.id,
     body,
+    reply_to_id: replyToId,
   });
   if (error) toast(error.message);
 }
