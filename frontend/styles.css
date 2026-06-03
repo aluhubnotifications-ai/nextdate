@@ -1779,7 +1779,7 @@ textarea { min-height: 88px; resize: vertical; }
 }
 .swipe-card.front {
   cursor: grab;
-  transition: transform .2s ease;
+  transition: transform .12s ease-out;
 }
 .swipe-card.front.dragging { cursor: grabbing; transition: none; }
 .swipe-card.behind {
