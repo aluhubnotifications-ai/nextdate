@@ -757,6 +757,41 @@ function renderOnboarding(root) {
     $("#cohort").value           = state.privateIdentity.cohort || "";
   }
 
+  // Profile picture: dataURL stored in private_identities.profile_picture.
+  // Editable via the file picker; cleared via the trash button. The
+  // picker state lives in `state.profilePictureData` (string | null)
+  // until save, which folds it into privPayload.
+  state.profilePictureData = state.privateIdentity?.profile_picture || null;
+  const pickPreview = $("#profile_picture_preview");
+  const pickBtn     = $("#profile_picture_btn");
+  const pickClear   = $("#profile_picture_clear");
+  const pickInput   = $("#profile_picture_file");
+  function paintPicturePreview() {
+    if (state.profilePictureData) {
+      pickPreview.innerHTML = `<img src="${state.profilePictureData}" alt=""/>`;
+      pickClear.hidden = false;
+      pickBtn.textContent = "Change photo";
+    } else {
+      pickPreview.textContent = "🖼️";
+      pickClear.hidden = true;
+      pickBtn.textContent = "Upload photo";
+    }
+  }
+  paintPicturePreview();
+  pickBtn.onclick = () => pickInput.click();
+  pickClear.onclick = () => { state.profilePictureData = null; paintPicturePreview(); };
+  pickInput.onchange = (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast("Please pick an image."); return; }
+    if (file.size > 2 * 1024 * 1024)   { toast("Image is larger than 2 MB."); return; }
+    const reader = new FileReader();
+    reader.onload = () => { state.profilePictureData = reader.result; paintPicturePreview(); };
+    reader.onerror = () => toast("Couldn't read that file.");
+    reader.readAsDataURL(file);
+    ev.target.value = "";
+  };
+
   const interests = makeTagInput($("#interests-input"), state.prefs?.interests || []);
   const hobbies   = makeTagInput($("#hobbies-input"),   state.prefs?.hobbies   || []);
 
@@ -787,6 +822,7 @@ function renderOnboarding(root) {
       age: $("#age").value ? Number($("#age").value) : null,
       country: $("#country").value || null,
       cohort: $("#cohort").value || null,
+      profile_picture: state.profilePictureData || null,
     };
 
     if (DEMO_MODE) {
@@ -1189,10 +1225,27 @@ async function renderMatches(root) {
     $("#go-discover")?.addEventListener("click", () => navigate("discover"));
     return;
   }
+  // Resolve every peer's profile up front. In real mode we hit
+  // public.profiles once with a batched .in() so the tiles render
+  // with real nicknames + avatars instead of falling back to
+  // "Unknown" (which is what demoPeer returns when the id isn't
+  // in DEMO_USERS).
+  const peerIds = sessions.map((s) => (s.user_a === me ? s.user_b : s.user_a));
+  let peerMap = {};
+  if (DEMO_MODE) {
+    peerMap = Object.fromEntries(peerIds.map((id) => [id, demoPeer(id)]));
+  } else {
+    const { data: peers } = await supabase
+      .from("profiles")
+      .select("id, nickname, avatar_url, gender, zodiac_sign")
+      .in("id", peerIds);
+    peerMap = Object.fromEntries((peers || []).map((p) => [p.id, p]));
+  }
+
   grid.innerHTML = "";
   for (const s of sessions) {
     const otherId = s.user_a === me ? s.user_b : s.user_a;
-    const peer = demoPeer(otherId);
+    const peer = peerMap[otherId] || { nickname: "Unknown", avatar_url: "🦊" };
     const tile = document.createElement("button");
     tile.className = "match-tile";
     tile.innerHTML = `
@@ -2667,7 +2720,19 @@ async function hydrateIdentity() {
     panel.innerHTML = `<div class="muted">No private identity on file for this user yet.</div>`;
     return;
   }
+  // Replace the emoji avatar in the chat header and the info panel
+  // with the revealed photo if the user uploaded one.
+  if (id.profile_picture) {
+    const peerAv = $("#peer-avatar");
+    if (peerAv) peerAv.innerHTML = `<img src="${id.profile_picture}" alt=""/><span class="status-dot"></span>`;
+    const infoAv = $("#info-avatar");
+    if (infoAv) infoAv.innerHTML = `<img src="${id.profile_picture}" alt=""/><span class="status-dot"></span>`;
+  }
+  const picture = id.profile_picture
+    ? `<div class="identity-picture"><img src="${id.profile_picture}" alt=""/></div>`
+    : "";
   panel.innerHTML = `
+    ${picture}
     <div class="identity-row"><span>Real name</span><span>${escapeHtml(id.real_name || "—")}</span></div>
     <div class="identity-row"><span>Age</span><span>${id.age ?? "—"}</span></div>
     <div class="identity-row"><span>Country</span><span>${escapeHtml(id.country || "—")}</span></div>

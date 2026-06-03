@@ -3034,3 +3034,44 @@ html[data-theme="light"] .skeleton {
 #nd-progress.mid    { transform: scaleX(.7);  opacity: 1; }
 #nd-progress.almost { transform: scaleX(.92); opacity: 1; }
 #nd-progress.done   { transform: scaleX(1);   opacity: 0; }
+
+/* Onboarding: profile-picture picker */
+.picture-picker {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.04);
+  border: 1px dashed rgba(255,255,255,.14);
+}
+.picture-preview {
+  width: 84px; height: 84px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 38px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  overflow: hidden; flex-shrink: 0;
+}
+.picture-preview img { width: 100%; height: 100%; object-fit: cover; }
+.picture-actions { display: flex; flex-direction: column; gap: 6px; }
+html[data-theme="light"] .picture-picker {
+  background: rgba(0,0,0,.03);
+  border-color: rgba(0,0,0,.15);
+}
+html[data-theme="light"] .picture-preview {
+  background: rgba(0,0,0,.05);
+  border-color: rgba(0,0,0,.1);
+}
+
+/* Chat header / info panel: photo replaces emoji after reveal */
+.avatar img,
+.info-avatar img {
+  width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
+}
+.identity-picture {
+  display: flex; justify-content: center;
+  margin: 0 0 14px;
+}
+.identity-picture img {
+  width: 120px; height: 120px; border-radius: 50%; object-fit: cover;
+  border: 3px solid rgba(255,255,255,.12);
+}

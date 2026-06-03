@@ -294,6 +294,18 @@
 
       <div class="card" style="margin-top:14px">
         <h2>Private identity <span class="badge">locked until mutual reveal</span></h2>
+        <div class="field">
+          <label>Profile picture <span class="muted" style="font-weight:400;">— shown only after both of you reveal</span></label>
+          <div class="picture-picker">
+            <div class="picture-preview" id="profile_picture_preview" aria-hidden="true">🖼️</div>
+            <div class="picture-actions">
+              <input type="file" id="profile_picture_file" accept="image/*" hidden />
+              <button class="btn ghost sm" type="button" id="profile_picture_btn">Upload photo</button>
+              <button class="btn ghost sm" type="button" id="profile_picture_clear" hidden>Remove</button>
+              <div class="muted" style="font-size:12px;">JPG / PNG, up to about 2 MB.</div>
+            </div>
+          </div>
+        </div>
         <div class="row">
           <div class="field"><label>Real name</label><input id="real_name" /></div>
           <div class="field"><label>Age</label><input id="age" type="number" min="16" max="99" /></div>

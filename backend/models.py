@@ -61,6 +61,7 @@ class PrivateIdentity(BaseModel):
     age: Optional[int] = Field(default=None, ge=16, le=99)
     country: Optional[str] = None
     cohort: Optional[str] = None
+    profile_picture: Optional[str] = None
     updated_at: Optional[datetime] = None
 
 
