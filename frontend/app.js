@@ -988,7 +988,7 @@ function autoGrowTextarea() {
   const ta = $("#msg-input");
   if (!ta) return;
   ta.style.height = "auto";
-  ta.style.height = Math.min(180, ta.scrollHeight) + "px";
+  ta.style.height = Math.min(140, ta.scrollHeight) + "px";
 }
 
 function buildEmojiPicker(filter = "") {

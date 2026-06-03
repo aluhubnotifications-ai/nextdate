@@ -901,14 +901,14 @@ textarea { min-height: 88px; resize: vertical; }
 
 .composer textarea {
   flex: 1;
-  min-height: 52px;
-  max-height: 180px;
+  min-height: 40px;
+  max-height: 140px;
   background: var(--bg-elevated);
   border: 1.5px solid var(--border);
   border-radius: 22px;
-  padding: 14px 18px;
+  padding: 10px 16px;
   font-size: 15px;
-  line-height: 1.45;
+  line-height: 1.4;
   font-family: inherit;
   resize: none;
   overflow-y: auto;
@@ -2075,9 +2075,13 @@ textarea { min-height: 88px; resize: vertical; }
 
 @media (max-width: 760px) {
   .bottom-tabs { display: flex; }
-  /* Hide the bottom nav when typing (keyboard up) or inside a chat thread. */
+  /* Hide both the top brand bar and the bottom tabs when typing (keyboard
+     up) or inside a chat thread — only the chat header (peer name + back
+     button) stays visible. */
   html.kb-open .bottom-tabs,
-  html.chat-open .bottom-tabs { display: none; }
+  html.chat-open .bottom-tabs,
+  html.kb-open .mobile-topbar,
+  html.chat-open .mobile-topbar { display: none; }
   .swipe-stack { max-height: none; }
 }
 
