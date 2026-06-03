@@ -801,7 +801,7 @@ function flyAndCycle(card, dir) {
   card.style.transition = "transform .28s ease, opacity .28s ease";
   card.style.transform = `translate(${sign * 600}px, 80px) rotate(${sign * 24}deg)`;
   card.style.opacity = "0";
-  setTimeout(() => cycle(dir), 240);
+  setTimeout(() => cycle(dir), 120);
 }
 
 function cycle(dir) {
@@ -822,10 +822,10 @@ function likeCurrent(card) {
   state.liked.add(user.user_id);
   if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
   if (card) {
-    card.style.transition = "transform .28s ease, opacity .28s ease";
+    card.style.transition = "transform .14s ease-out, opacity .14s ease-out";
     card.style.transform = "translate(600px, 80px) rotate(24deg)";
     card.style.opacity = "0";
-    setTimeout(() => { advance(); }, 240);
+    setTimeout(() => { advance(); }, 120);
   } else {
     advance();
   }
