@@ -1861,6 +1861,13 @@ async function loadMessages(sessionId) {
     data = res.data;
   }
   body.innerHTML = "";
+  // Cache the loaded messages so reply-quotes can resolve their
+  // target without another DB round trip. findMessage() reads from
+  // this map in real mode (DEMO_MODE still uses DEMO_MESSAGES).
+  if (!DEMO_MODE) {
+    state.sessionMessages = state.sessionMessages || {};
+    state.sessionMessages[sessionId] = (data || []).slice();
+  }
   for (const m of data || []) appendMessage(m);
   body.scrollTop = body.scrollHeight;
 }
@@ -1868,6 +1875,14 @@ async function loadMessages(sessionId) {
 function appendMessage(m) {
   const body = $("#chat-body");
   if (!body) return;
+
+  // Keep the lookup cache in sync so newly-arrived realtime messages
+  // are reachable from findMessage() (used by reply-quote rendering).
+  if (!DEMO_MODE) {
+    const cache = (state.sessionMessages = state.sessionMessages || {});
+    const arr = (cache[m.session_id] = cache[m.session_id] || []);
+    if (!arr.some((x) => x.id === m.id)) arr.push(m);
+  }
 
   // Day separator
   const dayLabel = formatDayLabel(m.created_at);
@@ -1906,7 +1921,10 @@ function appendMessage(m) {
 }
 
 function findMessage(sessionId, msgId) {
-  return (DEMO_MESSAGES[sessionId] || []).find((x) => x.id === msgId);
+  if (DEMO_MODE) {
+    return (DEMO_MESSAGES[sessionId] || []).find((x) => x.id === msgId);
+  }
+  return (state.sessionMessages?.[sessionId] || []).find((x) => x.id === msgId);
 }
 
 function renderReplyQuote(m) {
@@ -1915,9 +1933,13 @@ function renderReplyQuote(m) {
   if (!target) {
     return `<div class="bubble-quote bubble-quote-missing">Original message unavailable</div>`;
   }
-  const peer = target.sender_id === state.user?.id
-    ? "You"
-    : (demoPeer(target.sender_id).nickname || "Them");
+  // In real mode the chat only ever has two participants, so the
+  // sender of the quoted message is either me or the active peer.
+  // demoPeer() would have returned "Unknown" here.
+  const peerName = DEMO_MODE
+    ? (demoPeer(target.sender_id).nickname || "Them")
+    : (state.activeSession?.peer_profile?.nickname || "Them");
+  const peer = target.sender_id === state.user?.id ? "You" : peerName;
   const snippet = (target.body || (target.attachments?.length ? "📎 Attachment" : "")).slice(0, 80);
   return `
     <button class="bubble-quote" data-quote-id="${escapeHtml(target.id)}">
@@ -2210,6 +2232,14 @@ function deleteMessage(msg) {
       if (i >= 0) arr.splice(i, 1);
     }
   } else {
+    // Drop from the lookup cache so a later reply that quoted this
+    // message renders "Original message unavailable" instead of
+    // pointing at a deleted row.
+    const arr = state.sessionMessages?.[state.activeSession.id];
+    if (arr) {
+      const i = arr.findIndex((x) => x.id === msg.id);
+      if (i >= 0) arr.splice(i, 1);
+    }
     supabase.from("messages").delete().eq("id", msg.id)
       .then(({ error }) => { if (error) toast(error.message); });
   }
