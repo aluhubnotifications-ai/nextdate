@@ -688,12 +688,23 @@ function renderOnboarding(root) {
       return;
     }
 
-    const [p1, p2, p3] = await Promise.all([
-      supabase.from("profiles").upsert(profilePayload, { onConflict: "id" }).select().single(),
+    // public.match_preferences.user_id and public.private_identities.user_id
+    // are foreign keys to public.profiles(id). On first-save the profiles
+    // row doesn't exist yet, so we must upsert it BEFORE the other two —
+    // otherwise the FK fires before the profile lands and Postgres rejects
+    // the dependent inserts with a 400.
+    const p1 = await supabase
+      .from("profiles")
+      .upsert(profilePayload, { onConflict: "id" })
+      .select()
+      .single();
+    if (p1.error) return toast(p1.error.message);
+
+    const [p2, p3] = await Promise.all([
       supabase.from("match_preferences").upsert(prefsPayload, { onConflict: "user_id" }).select().single(),
       supabase.from("private_identities").upsert(privPayload, { onConflict: "user_id" }).select().single(),
     ]);
-    const err = p1.error || p2.error || p3.error;
+    const err = p2.error || p3.error;
     if (err) return toast(err.message);
 
     state.profile = p1.data;
