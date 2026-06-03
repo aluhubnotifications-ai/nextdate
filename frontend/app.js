@@ -302,6 +302,9 @@ async function navigate(name) {
   // own its background, accent color, and ambient glow.
   root.dataset.section = name;
   root.classList.toggle("discover", name === "discover");
+  // The chat-open flag (used to hide the bottom nav inside a conversation)
+  // is only valid while the chats view is mounted.
+  if (name !== "chats") document.documentElement.classList.remove("chat-open");
   document.querySelectorAll("[data-view]").forEach((b) =>
     b.classList.toggle("active", b.dataset.view === name),
   );
@@ -378,19 +381,34 @@ document.getElementById("open-drawer")?.addEventListener("click", openDrawer);
 document.getElementById("sidebar-backdrop")?.addEventListener("click", closeDrawer);
 document.getElementById("mobile-notif-btn")?.addEventListener("click", () => navigate("notifications"));
 
-// Keep the bottom nav above the Android on-screen keyboard. Modern browsers
-// honour the viewport meta's interactive-widget=resizes-content; this is a
-// fallback for older Android Chrome / WebView via VisualViewport.
-(function trackKeyboardInset() {
+// Hide the bottom nav while the on-screen keyboard is open. We track the
+// keyboard via VisualViewport for older Android, and via focus on text
+// inputs as a belt-and-suspenders fallback.
+(function trackKeyboard() {
+  const root = document.documentElement;
+  const setKbOpen = (open) => root.classList.toggle("kb-open", open);
+
   const vv = window.visualViewport;
-  if (!vv) return;
-  const sync = () => {
-    const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    document.documentElement.style.setProperty("--kb-inset", inset + "px");
-  };
-  vv.addEventListener("resize", sync);
-  vv.addEventListener("scroll", sync);
-  sync();
+  if (vv) {
+    const sync = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty("--kb-inset", inset + "px");
+      setKbOpen(inset > 80);
+    };
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    sync();
+  }
+
+  const isTextField = (el) =>
+    el && (el.tagName === "TEXTAREA" ||
+           (el.tagName === "INPUT" && !/^(checkbox|radio|button|submit|file|range)$/i.test(el.type)) ||
+           el.isContentEditable);
+  document.addEventListener("focusin", (e) => { if (isTextField(e.target)) setKbOpen(true); });
+  document.addEventListener("focusout", () => {
+    // Defer so a focus jump between two inputs doesn't flash the nav.
+    setTimeout(() => { if (!isTextField(document.activeElement)) setKbOpen(false); }, 0);
+  });
 })();
 
 // ---------- theme ----------
@@ -1258,6 +1276,7 @@ function closeActiveChat() {
   cleanupRealtime();
   state.activeSession = null;
   $("#chat-shell")?.classList.remove("has-active");
+  document.documentElement.classList.remove("chat-open");
   $("#chat-empty")?.classList.remove("hidden");
   $("#chat-active")?.classList.add("hidden");
   $$(".session-item").forEach((el) => el.classList.remove("active"));
@@ -1409,6 +1428,7 @@ async function openSession(sessionId) {
 
   $$(".session-item").forEach((el) => el.classList.toggle("active", el.dataset.sessionId === sessionId));
   $("#chat-shell")?.classList.add("has-active");
+  document.documentElement.classList.add("chat-open");
   $("#chat-empty").classList.add("hidden");
   $("#chat-active").classList.remove("hidden");
 

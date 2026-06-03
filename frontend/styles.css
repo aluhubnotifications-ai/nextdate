@@ -2075,6 +2075,9 @@ textarea { min-height: 88px; resize: vertical; }
 
 @media (max-width: 760px) {
   .bottom-tabs { display: flex; }
+  /* Hide the bottom nav when typing (keyboard up) or inside a chat thread. */
+  html.kb-open .bottom-tabs,
+  html.chat-open .bottom-tabs { display: none; }
   .swipe-stack { max-height: none; }
 }
 
