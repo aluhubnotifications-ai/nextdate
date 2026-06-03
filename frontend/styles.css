@@ -101,8 +101,8 @@ a:hover { color: var(--brand-coral); text-decoration: underline; }
 #view-root {
   overflow-y: auto;
   overflow-x: hidden;
-  height: 100vh;
-  height: 100dvh;
+  flex: 1;
+  min-height: 0;
   padding: var(--shell-pad) calc(var(--shell-pad) + 6px);
   scroll-behavior: smooth;
 }
@@ -1706,18 +1706,18 @@ textarea { min-height: 88px; resize: vertical; }
    ============================================================ */
 #view-root.discover {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
   overflow-y: auto;
 }
 .discover-shell {
   width: 100%;
-  max-width: 540px;
+  max-width: 560px;
   display: flex;
   flex-direction: column;
   gap: 18px;
   padding: 18px 8px 24px;
-  margin: 8px auto 24px;
+  margin: 0 auto;
 }
 .discover-header {
   display: flex;
@@ -1754,12 +1754,16 @@ textarea { min-height: 88px; resize: vertical; }
 .swipe-stack {
   position: relative;
   width: 100%;
-  max-width: 420px;
-  height: 540px;
+  max-width: 460px;
+  height: min(640px, 72dvh);
 }
 .swipe-empty-host {
   width: 100%;
-  max-width: 420px;
+  max-width: 460px;
+  min-height: min(640px, 72dvh);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .swipe-card {
   position: absolute;
@@ -1791,7 +1795,7 @@ textarea { min-height: 88px; resize: vertical; }
 }
 
 .swipe-hero {
-  height: 240px;
+  height: 280px;
   background: linear-gradient(135deg, #C39CFF 0%, #FF7FB8 50%, #6FA5FF 100%);
   background-size: 180% 180%;
   animation: gradient-shift 14s ease infinite;
@@ -1814,7 +1818,7 @@ textarea { min-height: 88px; resize: vertical; }
   pointer-events: none;
 }
 .swipe-avatar {
-  font-size: 132px;
+  font-size: 150px;
   line-height: 1;
   position: relative;
   z-index: 1;
@@ -1966,13 +1970,14 @@ textarea { min-height: 88px; resize: vertical; }
   letter-spacing: 0.2px;
 }
 .swipe-empty {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 8px;
-  padding: 60px 24px;
+  gap: 10px;
+  padding: 60px 28px;
   background: #FFFFFF;
   color: #1A1A2E;
   border-radius: 28px;
@@ -1980,8 +1985,8 @@ textarea { min-height: 88px; resize: vertical; }
     0 24px 60px rgba(20, 8, 40, 0.22),
     0 4px 12px rgba(20, 8, 40, 0.08);
 }
-.swipe-empty-emoji { font-size: 56px; }
-.swipe-empty h3 { margin: 4px 0 0; }
+.swipe-empty-emoji { font-size: 64px; }
+.swipe-empty h3 { margin: 4px 0 0; font-size: 20px; }
 .swipe-empty p { color: #8A8AA0; margin: 0 0 12px; max-width: 280px; }
 
 /* ============================================================
@@ -2024,14 +2029,16 @@ textarea { min-height: 88px; resize: vertical; }
 .matches-empty {
   grid-column: 1 / -1;
   text-align: center;
-  padding: 40px 20px;
+  padding: 60px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50vh;
 }
-.matches-empty-emoji { font-size: 52px; }
-.matches-empty h3 { margin: 6px 0 0; }
+.matches-empty-emoji { font-size: 64px; }
+.matches-empty h3 { margin: 8px 0 0; font-size: 22px; }
 .matches-empty p { color: var(--text-muted); margin: 0 0 14px; max-width: 320px; }
 
 /* ============================================================
@@ -2254,10 +2261,17 @@ textarea { min-height: 88px; resize: vertical; }
   .discover-title { font-size: 22px; }
   .discover-sub   { font-size: 12px; }
 
-  .swipe-stack { height: 70dvh; max-height: 540px; }
+  .swipe-stack {
+    height: min(620px, calc(100dvh - 160px));
+    max-width: 100%;
+  }
+  .swipe-empty-host {
+    min-height: min(620px, calc(100dvh - 160px));
+    max-width: 100%;
+  }
 
-  .swipe-hero          { height: 210px; }
-  .swipe-avatar        { font-size: 112px; }
+  .swipe-hero          { height: 240px; }
+  .swipe-avatar        { font-size: 128px; }
 
   .swipe-body { padding: 18px 20px 18px; gap: 12px; }
   .swipe-name { font-size: 23px; }
