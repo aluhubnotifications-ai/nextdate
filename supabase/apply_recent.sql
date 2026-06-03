@@ -22,7 +22,6 @@
 -- ============================================================
 
 
-
 -- ============================================================
 -- 20260603000001_embedding_matching.sql
 -- ============================================================
@@ -156,6 +155,11 @@ alter table public.private_identities
 
 alter table public.private_identities
   drop column if exists profile_picture;
+
+-- Return shape changed (dropped whatsapp_number + profile_picture), so
+-- CREATE OR REPLACE FUNCTION won't accept the new signature. Drop the
+-- old function first; the policy granting EXECUTE is re-applied below.
+drop function if exists public.get_revealed_identity(uuid);
 
 create or replace function public.get_revealed_identity(session uuid)
 returns table (
