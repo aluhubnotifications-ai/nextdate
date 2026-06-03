@@ -246,12 +246,18 @@ def get_curated_suggestions(
 
     prefs = MatchPreferences(**pref_rows.data[0])
 
-    # Lazy backfill: make sure the caller has an embedding before ranking.
+    # Embeddings are CACHED on the row. We only ever compute one for users
+    # whose `embedding` is null — either brand-new accounts, or rows whose
+    # prefs the user just edited (the trigger in 20260603000002 sets
+    # embedding back to null on a real change). Existing cached vectors are
+    # never recomputed here, so a new signup doesn't invalidate anyone else.
+
+    # 1. Make sure the caller is embedded so the RPC has a query vector.
     ensure_embedding(db, user_id, prefs)
 
-    # Opportunistically backfill any eligible candidates missing an embedding,
-    # so they show up in the kNN. Cheap because the model is already loaded
-    # and this only runs once per user across the app's lifetime.
+    # 2. Embed eligible candidates that are still null. Bounded to keep
+    #    a single request cheap; whatever doesn't fit this batch gets
+    #    picked up on the next /suggestions call.
     stale = (
         db.table("match_preferences")
         .select("user_id, target_intent, term_length, interests, hobbies, leisure_time, wants_in_relationship")
@@ -259,6 +265,7 @@ def get_curated_suggestions(
         .eq("term_length", prefs.term_length)
         .is_("embedding", "null")
         .neq("user_id", user_id)
+        .limit(20)
         .execute()
     )
     for row in stale.data or []:
@@ -267,6 +274,7 @@ def get_curated_suggestions(
             {"embedding": embed_prefs(cand_prefs)}
         ).eq("user_id", row["user_id"]).execute()
 
+    # 3. Postgres does the ranking against all cached vectors via pgvector.
     ranked = db.rpc("match_candidates", {"me": user_id, "k": 50}).execute()
     ordered = [(r["user_id"], float(r["score"])) for r in (ranked.data or [])]
     if not ordered:
