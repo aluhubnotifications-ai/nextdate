@@ -6,9 +6,9 @@
 // Matching is intentionally left to be swapped with an AI-driven engine later.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-const SUPABASE_URL      = "https://YOUR-PROJECT.supabase.co";
+const SUPABASE_URL      = "https://wkdamyjswlixzkwehxyc.supabase.co";
 const SUPABASE_ANON_KEY = "YOUR-SUPABASE-ANON-KEY";
-const BACKEND_URL       = "https://alu-match-engine.onrender.com";
+const BACKEND_URL       = "https://nextdate-5may.onrender.com";
 const EMAIL_DOMAINS     = ["alustudent.com", "aluedu.org"];
 
 // ───── DEMO MODE ─────
