@@ -901,14 +901,14 @@ textarea { min-height: 88px; resize: vertical; }
 
 .composer textarea {
   flex: 1;
-  min-height: 40px;
+  min-height: 44px;
   max-height: 140px;
   background: var(--bg-elevated);
   border: 1.5px solid var(--border);
   border-radius: 22px;
-  padding: 10px 16px;
+  padding: 11px 18px;
   font-size: 15px;
-  line-height: 1.4;
+  line-height: 1.35;
   font-family: inherit;
   resize: none;
   overflow-y: auto;
@@ -927,6 +927,17 @@ textarea { min-height: 88px; resize: vertical; }
   flex-shrink: 0;
 }
 .composer .send-btn svg { width: 22px; height: 22px; }
+
+@media (max-width: 760px) {
+  .composer { padding: 10px 12px 12px; gap: 8px; }
+  .composer-row { gap: 6px; }
+  .composer-actions { gap: 0; padding-bottom: 4px; }
+  .composer-btn { width: 36px; height: 36px; }
+  .composer-btn svg { width: 20px; height: 20px; }
+  .composer .send-btn { width: 44px; height: 44px; }
+  .composer .send-btn svg { width: 18px; height: 18px; }
+  .composer textarea { padding: 11px 16px; }
+}
 
 /* Emoji grid (used inside modal) */
 .emoji-grid {
