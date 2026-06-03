@@ -822,6 +822,251 @@ textarea { min-height: 88px; resize: vertical; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Message row wraps a single bubble + swipe-reply hint */
+.bubble-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+  position: relative;
+}
+.bubble-row.mine { justify-content: flex-end; }
+.bubble-row .bubble {
+  align-self: auto;
+  margin-bottom: 0;
+  touch-action: pan-y;
+  will-change: transform;
+}
+.bubble-row.active-menu .bubble {
+  box-shadow: 0 0 0 2px var(--brand-rose), 0 8px 24px var(--brand-glow);
+}
+.bubble-row.flash .bubble {
+  animation: bubble-flash 1.2s ease-out;
+}
+@keyframes bubble-flash {
+  0%, 100% { box-shadow: 0 6px 18px var(--brand-glow); }
+  30%      { box-shadow: 0 0 0 4px var(--brand-rose), 0 12px 28px var(--brand-glow); }
+}
+
+.swipe-reply-hint {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 32px; height: 32px;
+  margin-top: -16px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--brand-rose);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+.swipe-reply-hint svg { width: 16px; height: 16px; }
+.bubble-row.mine .swipe-reply-hint { left: auto; right: 4px; }
+
+/* In-bubble reply quote */
+.bubble-quote {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border-left: 3px solid var(--brand-coral);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  border: 0;
+  border-left: 3px solid var(--brand-coral);
+  color: inherit;
+  font-family: inherit;
+  transition: background .15s ease;
+}
+.bubble-quote:hover { background: rgba(255, 255, 255, 0.14); }
+.bubble.mine .bubble-quote { background: rgba(0, 0, 0, 0.18); border-left-color: #FFFFFF; }
+.bubble-quote-author {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  opacity: 0.9;
+}
+.bubble-quote-text {
+  font-size: 12.5px;
+  opacity: 0.85;
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bubble-quote-missing {
+  font-style: italic;
+  background: rgba(255, 255, 255, 0.06);
+  border-left-color: var(--text-dim);
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* Reactions */
+.bubble-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  margin-right: -4px;
+}
+.reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s ease, transform .12s ease;
+}
+.reaction-chip:hover { background: rgba(0, 0, 0, 0.4); }
+.reaction-chip:active { transform: scale(0.94); }
+.reaction-chip.mine {
+  background: var(--brand-soft);
+  border-color: var(--brand-rose);
+}
+.reaction-chip .reaction-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.reaction-chip.mine .reaction-count { color: var(--brand-rose); }
+
+/* Long-press action menu */
+.msg-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 4, 22, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  animation: msg-menu-in .15s ease-out;
+}
+@keyframes msg-menu-in { from { opacity: 0; } to { opacity: 1; } }
+.msg-menu-sheet {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 10px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  animation: msg-menu-up .18s ease-out;
+}
+@keyframes msg-menu-up { from { transform: translateY(20px); } to { transform: translateY(0); } }
+.msg-menu-reactions {
+  display: flex;
+  justify-content: space-around;
+  padding: 6px;
+  background: var(--bg-elevated);
+  border-radius: 16px;
+  margin-bottom: 8px;
+}
+.msg-menu-react {
+  font-size: 26px;
+  background: transparent;
+  border: 0;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: transform .12s ease, background .12s ease;
+  color: inherit;
+}
+.msg-menu-react:hover { background: var(--brand-soft); transform: scale(1.12); }
+.msg-menu-react:active { transform: scale(0.92); }
+.msg-menu-actions {
+  display: flex;
+  flex-direction: column;
+}
+.msg-menu-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 12px;
+  font-family: inherit;
+}
+.msg-menu-action:hover { background: var(--bg-elevated); }
+.msg-menu-action svg { width: 20px; height: 20px; color: var(--text-muted); flex-shrink: 0; }
+.msg-menu-action.danger { color: var(--danger); }
+.msg-menu-action.danger svg { color: var(--danger); }
+
+/* Composer reply chip */
+.reply-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  margin-bottom: 4px;
+  animation: reply-chip-in .15s ease-out;
+}
+@keyframes reply-chip-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.reply-chip-bar {
+  width: 3px;
+  align-self: stretch;
+  background: var(--brand-grad);
+  border-radius: 999px;
+}
+.reply-chip-body { flex: 1; min-width: 0; }
+.reply-chip-author {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--brand-rose);
+  letter-spacing: 0.2px;
+}
+.reply-chip-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reply-chip-close {
+  background: transparent;
+  border: 0;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.reply-chip-close:hover { background: var(--bg-input); color: var(--text); }
+.reply-chip-close svg { width: 16px; height: 16px; }
+
 /* Typing indicator */
 .typing {
   align-self: flex-start;
