@@ -492,58 +492,89 @@ async function onSignedIn(user) {
   if (!state.profile || !state.prefs) {
     return navigate("onboarding");
   }
-  subscribeMatchNotifications();
+  await loadNotifications();
+  subscribeNotifications();
   navigate("discover");
 }
 
-// ---------- match notifications (real-mode only) ----------
-// Both sides of a mutual match end up with a new chat_sessions row. The
-// liker already announces it via handleMutualMatchReal; the OTHER user
-// learns about it through this subscription so they get a toast +
-// notification in real time instead of having to refresh the Matches tab.
-let matchChannel = null;
-function subscribeMatchNotifications() {
+// ---------- notifications (DB-backed in real mode) ----------
+// Server-side triggers in migration 20260603000004 create a row in
+// `public.notifications` whenever something happens that the user
+// should know about (new message, mutual match, reveal). We hydrate
+// from that table on sign-in and stream new rows via Postgres realtime
+// so badges + toasts + the Notifications view always reflect the DB.
+const NOTIF_ICON = { message: "💬", match: "💖", reveal: "🔓", system: "🌱" };
+
+function isTodayIso(iso) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear()
+      && d.getMonth() === now.getMonth()
+      && d.getDate() === now.getDate();
+}
+
+function mapDbNotif(row) {
+  return {
+    id: row.id,
+    kind: row.kind,
+    icon: NOTIF_ICON[row.kind] || "🔔",
+    title: row.title,
+    text: row.body || "",
+    time: formatRelativeTime(row.created_at),
+    group: isTodayIso(row.created_at) ? "today" : "earlier",
+    unread: row.unread,
+    session_id: row.session_id,
+    created_at: row.created_at,
+  };
+}
+
+async function loadNotifications() {
+  if (DEMO_MODE) return; // demo seeds state.notifications from DEMO_NOTIFICATIONS
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) { console.warn("notifications load:", error.message); return; }
+  state.notifications = (data || []).map(mapDbNotif);
+  refreshBadges();
+}
+
+let notifChannel = null;
+function subscribeNotifications() {
   if (DEMO_MODE || !supabase || !state.user) return;
-  if (matchChannel) { supabase.removeChannel(matchChannel); matchChannel = null; }
-  const me = state.user.id;
-  matchChannel = supabase
-    .channel(`matches:${me}`)
+  if (notifChannel) { supabase.removeChannel(notifChannel); notifChannel = null; }
+  notifChannel = supabase
+    .channel(`notifs:${state.user.id}`)
     .on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "chat_sessions", filter: `user_a=eq.${me}` },
-      onMatchInsert,
-    )
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "chat_sessions", filter: `user_b=eq.${me}` },
-      onMatchInsert,
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${state.user.id}`,
+      },
+      onNotificationInsert,
     )
     .subscribe();
 }
 
-async function onMatchInsert(payload) {
-  const session = payload.new;
-  if (!session || !state.user) return;
-  // Dedup: the liker already announced this locally.
-  if (state.notifications.some((n) => n.session_id === session.id)) return;
-  const me = state.user.id;
-  const peerId = session.user_a === me ? session.user_b : session.user_a;
-  const { data: peer } = await supabase
-    .from("profiles")
-    .select("id, nickname, avatar_url")
-    .eq("id", peerId)
-    .maybeSingle();
-  const name = peer?.nickname || "someone new";
-  state.notifications.unshift({
-    id: `n-${Date.now()}`,
-    icon: "💖", kind: "match",
-    title: `It's a match — ${name}`,
-    text: `You both liked each other. Say hi when you're ready.`,
-    time: "just now", group: "today", unread: true,
-    session_id: session.id,
-  });
+function onNotificationInsert(payload) {
+  const n = mapDbNotif(payload.new);
+  // If a message lands in the chat that's already on screen, the
+  // per-session subscription draws the bubble — treat the notif as
+  // already-read so the badge doesn't blink unnecessarily.
+  if (n.kind === "message" && state.activeSession?.id === n.session_id) {
+    n.unread = false;
+    supabase.from("notifications").update({ unread: false }).eq("id", n.id)
+      .then(() => {});
+  } else {
+    toast(`${n.icon} ${n.title}`);
+  }
+  state.notifications.unshift(n);
   refreshBadges();
-  toast(`💖 New match with ${name}!`);
+  if (document.getElementById("notifications-list")) paintNotifications();
 }
 
 // ---------- AUTH ----------
@@ -580,7 +611,7 @@ function renderAuth(root) {
 
 async function doLogout() {
   if (DEMO_MODE) { toast("Demo mode — no real session to sign out of."); return; }
-  if (matchChannel) { supabase.removeChannel(matchChannel); matchChannel = null; }
+  if (notifChannel) { supabase.removeChannel(notifChannel); notifChannel = null; }
   clearSession();
   state.user = null;
   setNavVisible(false);
@@ -935,16 +966,10 @@ function likeCurrent(card) {
   else advance();
 }
 
-function handleMutualMatchReal(user, sessionId) {
-  state.notifications.unshift({
-    id: `n-${Date.now()}`,
-    icon: "💖", kind: "match",
-    title: `It's a match — ${user.nickname}`,
-    text: `You both liked each other. Say hi when you're ready.`,
-    time: "just now", group: "today", unread: true,
-    session_id: sessionId,
-  });
-  refreshBadges();
+function handleMutualMatchReal(user, _sessionId) {
+  // Toast immediately for snappy feedback; the notifications-table
+  // trigger creates the persistent row and the realtime subscription
+  // adds it to state.notifications + refreshes the badge shortly after.
   toast(`💖 It's a match with ${user.nickname}!`);
 }
 
@@ -1568,6 +1593,15 @@ async function openSession(sessionId) {
     }
   }
   if (touched) refreshBadges();
+  if (touched && !DEMO_MODE && state.user) {
+    supabase.from("notifications")
+      .update({ unread: false })
+      .eq("user_id", state.user.id)
+      .eq("session_id", sessionId)
+      .eq("kind", "message")
+      .eq("unread", true)
+      .then(() => {});
+  }
 
   await loadMessages(sessionId);
   await refreshRevealState();
@@ -2489,10 +2523,18 @@ function renderNotifications(root) {
     };
   });
 
-  $("#mark-all-read").onclick = () => {
+  $("#mark-all-read").onclick = async () => {
     state.notifications.forEach((n) => (n.unread = false));
     refreshBadges();
     paintNotifications();
+    if (!DEMO_MODE && state.user) {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ unread: false })
+        .eq("user_id", state.user.id)
+        .eq("unread", true);
+      if (error) return toast(error.message);
+    }
     toast("All caught up.");
   };
 
@@ -2560,10 +2602,19 @@ function buildNotifNode(n) {
     if (idx >= 0) state.notifications.splice(idx, 1);
     refreshBadges();
     paintNotifications();
+    if (!DEMO_MODE) {
+      supabase.from("notifications").delete().eq("id", n.id)
+        .then(({ error }) => { if (error) toast(error.message); });
+    }
   });
   el.onclick = async () => {
+    const wasUnread = n.unread;
     n.unread = false;
     refreshBadges();
+    if (!DEMO_MODE && wasUnread) {
+      supabase.from("notifications").update({ unread: false }).eq("id", n.id)
+        .then(() => {});
+    }
     if (n.session_id) {
       await navigate("chats");
       await openSession(n.session_id);
