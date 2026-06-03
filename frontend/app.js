@@ -1582,17 +1582,35 @@ function attachBubbleInteractions(row, msg) {
     openMessageMenu(row, msg);
   });
 
-  // Long-press / right-click → action menu
+  // Long-press / right-click → action menu. We also track whether a tap
+  // moved (i.e. was actually a swipe) so a plain tap can reveal the kebab
+  // on touch devices instead of doing nothing.
   let lpTimer = null;
+  let downAt = 0;
+  let moved = false;
   const cancelLP = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
   bubble.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 && e.pointerType !== "touch") return;
+    downAt = Date.now();
+    moved = false;
     cancelLP();
     lpTimer = setTimeout(() => { lpTimer = null; openMessageMenu(row, msg); }, 420);
   });
-  ["pointerup", "pointermove", "pointercancel", "pointerleave"].forEach((ev) =>
+  bubble.addEventListener("pointermove", (e) => {
+    if (downAt && (Math.abs(e.movementX) > 4 || Math.abs(e.movementY) > 4)) moved = true;
+    cancelLP();
+  });
+  ["pointercancel", "pointerleave"].forEach((ev) =>
     bubble.addEventListener(ev, cancelLP),
   );
+  bubble.addEventListener("pointerup", (e) => {
+    cancelLP();
+    if (e.pointerType === "touch" && !moved && Date.now() - downAt < 380) {
+      e.preventDefault();
+      selectBubbleRow(row);
+    }
+    downAt = 0;
+  });
   bubble.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     openMessageMenu(row, msg);
@@ -1721,6 +1739,20 @@ function closeMessageMenu() {
   document.querySelector(`.bubble-row[data-msg-id="${rowId}"]`)?.classList.remove("active-menu");
   open.remove();
 }
+
+function selectBubbleRow(row) {
+  const already = row.classList.contains("selected");
+  document.querySelectorAll(".bubble-row.selected").forEach((r) => {
+    if (r !== row) r.classList.remove("selected");
+  });
+  row.classList.toggle("selected", !already);
+}
+
+// Tap anywhere that isn't a bubble or its kebab dismisses the selection.
+document.addEventListener("pointerdown", (e) => {
+  if (e.target.closest(".bubble-row, .msg-menu-overlay")) return;
+  document.querySelectorAll(".bubble-row.selected").forEach((r) => r.classList.remove("selected"));
+});
 
 function toggleReaction(msg, emoji) {
   if (!msg || !emoji) return;
