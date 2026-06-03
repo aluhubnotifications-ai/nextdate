@@ -98,6 +98,18 @@ a:hover { color: var(--brand-coral); text-decoration: underline; }
   overflow: hidden;
 }
 
+.app-main {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  /* Subtract the on-screen keyboard inset so the bottom nav stays visible
+     even on Android browsers that don't yet honour interactive-widget. */
+  height: calc(100dvh - var(--kb-inset, 0px));
+  overflow: hidden;
+  min-width: 0;
+}
+
 #view-root {
   overflow-y: auto;
   overflow-x: hidden;
@@ -2063,6 +2075,9 @@ textarea { min-height: 88px; resize: vertical; }
 
 @media (max-width: 760px) {
   .bottom-tabs { display: flex; }
+  /* Hide the bottom nav when typing (keyboard up) or inside a chat thread. */
+  html.kb-open .bottom-tabs,
+  html.chat-open .bottom-tabs { display: none; }
   .swipe-stack { max-height: none; }
 }
 
