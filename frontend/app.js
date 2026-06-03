@@ -307,14 +307,6 @@ async function navigate(name) {
   );
   closeDrawer();
   await views[name](root);
-  // Append a small mobile-only copyright footer to every view except
-  // the flush chat view (which has no padded bottom area).
-  if (name !== "chats") {
-    const footer = document.createElement("div");
-    footer.className = "mobile-footer";
-    footer.innerHTML = `&copy; 2026 NextDate. All rights reserved.`;
-    root.appendChild(footer);
-  }
 }
 
 document.querySelectorAll("[data-view]").forEach((b) =>
@@ -1822,6 +1814,10 @@ function renderProfile(root) {
     <div class="identity-row"><span>WhatsApp</span><span>${escapeHtml(pi?.whatsapp_number || "—")}</span></div>
   `;
   $("#edit-profile").onclick = () => navigate("onboarding");
+  const copy = document.createElement("div");
+  copy.className = "profile-copyright";
+  copy.innerHTML = `<span class="mark">&copy; 2026 NextDate</span> &middot; All rights reserved.`;
+  root.appendChild(copy);
 }
 
 // ---------- util ----------
