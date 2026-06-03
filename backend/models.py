@@ -115,4 +115,4 @@ class SuggestionResponse(BaseModel):
     avatar_url: Optional[str] = None
     gender: Optional[str] = None
     zodiac_sign: Optional[str] = None
-    score: int = 0
+    score: float = 0.0

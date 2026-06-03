@@ -129,6 +129,55 @@ def email_domain_ok(email: str) -> bool:
     return any(e.endswith("@" + d) for d in ALLOWED_EMAIL_DOMAINS)
 
 
+# ---------- embedding model (lazy) ----------
+# `all-MiniLM-L6-v2` is Apache-2.0, ~80 MB on disk, 384-dim output. We load it
+# on first use (not import) so cold-start auth requests aren't blocked by the
+# weight download, and so a backend that never serves /suggestions doesn't pay
+# the ~200 MB resident cost.
+_embedder = None
+
+
+def get_embedder():
+    global _embedder
+    if _embedder is None:
+        from sentence_transformers import SentenceTransformer
+
+        _embedder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    return _embedder
+
+
+def prefs_to_doc(prefs: "MatchPreferences") -> str:
+    interests = ", ".join(prefs.interests) if prefs.interests else "—"
+    hobbies = ", ".join(prefs.hobbies) if prefs.hobbies else "—"
+    leisure = prefs.leisure_time or "—"
+    wants = prefs.wants_in_relationship or "—"
+    return (
+        f"Looking for {prefs.target_intent} ({prefs.term_length}). "
+        f"Interests: {interests}. Hobbies: {hobbies}. "
+        f"Free time: {leisure}. In a partner: {wants}."
+    )
+
+
+def embed_prefs(prefs: "MatchPreferences") -> list[float]:
+    return get_embedder().encode(prefs_to_doc(prefs)).tolist()
+
+
+def ensure_embedding(db: Client, uid: str, prefs: "MatchPreferences") -> None:
+    """Compute + persist an embedding for `uid` if the row doesn't have one."""
+    row = (
+        db.table("match_preferences")
+        .select("embedding")
+        .eq("user_id", uid)
+        .limit(1)
+        .execute()
+    )
+    if row.data and row.data[0].get("embedding") is not None:
+        return
+    db.table("match_preferences").update({"embedding": embed_prefs(prefs)}).eq(
+        "user_id", uid
+    ).execute()
+
+
 # ---------- routes ----------
 @app.get("/healthz")
 def healthz():
@@ -197,31 +246,33 @@ def get_curated_suggestions(
 
     prefs = MatchPreferences(**pref_rows.data[0])
 
-    candidates_q = (
+    # Lazy backfill: make sure the caller has an embedding before ranking.
+    ensure_embedding(db, user_id, prefs)
+
+    # Opportunistically backfill any eligible candidates missing an embedding,
+    # so they show up in the kNN. Cheap because the model is already loaded
+    # and this only runs once per user across the app's lifetime.
+    stale = (
         db.table("match_preferences")
-        .select("user_id, interests, hobbies, leisure_time, wants_in_relationship")
+        .select("user_id, target_intent, term_length, interests, hobbies, leisure_time, wants_in_relationship")
         .eq("target_intent", prefs.target_intent)
         .eq("term_length", prefs.term_length)
+        .is_("embedding", "null")
+        .neq("user_id", user_id)
         .execute()
     )
+    for row in stale.data or []:
+        cand_prefs = MatchPreferences(**row)
+        db.table("match_preferences").update(
+            {"embedding": embed_prefs(cand_prefs)}
+        ).eq("user_id", row["user_id"]).execute()
 
-    rows = [r for r in (candidates_q.data or []) if r["user_id"] != user_id]
-    if not rows:
+    ranked = db.rpc("match_candidates", {"me": user_id, "k": 50}).execute()
+    ordered = [(r["user_id"], float(r["score"])) for r in (ranked.data or [])]
+    if not ordered:
         return []
 
-    my_interests = set(prefs.interests)
-    my_hobbies = set(prefs.hobbies)
-
-    scored = []
-    for r in rows:
-        score = 0
-        score += 2 * len(my_interests.intersection(set(r.get("interests") or [])))
-        score += 1 * len(my_hobbies.intersection(set(r.get("hobbies") or [])))
-        scored.append((score, r["user_id"]))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    ordered_ids = [uid for _, uid in scored]
-
+    ordered_ids = [uid for uid, _ in ordered]
     profiles_q = (
         db.table("profiles")
         .select("id, email, nickname, avatar_url, gender, zodiac_sign")
@@ -230,7 +281,6 @@ def get_curated_suggestions(
     )
 
     by_id: dict[str, Profile] = {p["id"]: Profile(**p) for p in (profiles_q.data or [])}
-    score_by_id = {uid: s for s, uid in scored}
 
     return [
         SuggestionResponse(
@@ -239,8 +289,8 @@ def get_curated_suggestions(
             avatar_url=by_id[uid].avatar_url,
             gender=by_id[uid].gender,
             zodiac_sign=by_id[uid].zodiac_sign,
-            score=score_by_id.get(uid, 0),
+            score=score,
         )
-        for uid in ordered_ids
+        for uid, score in ordered
         if uid in by_id
     ]
