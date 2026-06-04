@@ -777,7 +777,7 @@ function onProfileChange(payload) {
 // should know about (new message, mutual match, reveal). We hydrate
 // from that table on sign-in and stream new rows via Postgres realtime
 // so badges + toasts + the Notifications view always reflect the DB.
-const NOTIF_ICON = { message: "💬", match: "💖", reveal: "🔓", system: "🌱" };
+const NOTIF_ICON = { message: "💬", match: "💖", like: "💛", reveal: "🔓", system: "🌱" };
 
 function isTodayIso(iso) {
   if (!iso) return false;
@@ -3471,7 +3471,7 @@ async function hydrateIdentity() {
 }
 
 // ---------- NOTIFICATIONS ----------
-const NOTIF_KIND_LABEL = { all: "All", message: "Messages", match: "Matches", reveal: "Reveals", system: "System" };
+const NOTIF_KIND_LABEL = { all: "All", message: "Messages", like: "Likes", match: "Matches", reveal: "Reveals", system: "System" };
 
 function renderNotifications(root) {
   root.append($("#tpl-notifications").content.cloneNode(true));
@@ -3510,7 +3510,7 @@ function paintNotifications() {
   if (!list) return;
 
   // Update counts
-  const counts = { all: 0, message: 0, match: 0, reveal: 0, system: 0 };
+  const counts = { all: 0, message: 0, like: 0, match: 0, reveal: 0, system: 0 };
   for (const n of state.notifications) {
     counts.all++;
     if (counts[n.kind] !== undefined) counts[n.kind]++;
