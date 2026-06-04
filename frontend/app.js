@@ -2272,7 +2272,7 @@ async function loadSessions() {
     } else {
       last = state.lastMessageBySession.get(s.id);
     }
-    if (last) {
+    if (last && last.body !== null) {
       preview = (last.sender_id === state.user.id ? "You: " : "") + (last.body || "");
       lastTime = formatRelativeTime(last.created_at);
     }
@@ -2450,6 +2450,7 @@ async function loadMessages(sessionId) {
 }
 
 function appendMessage(m) {
+  if (!m || m.body === null) return;
   const body = $("#chat-body");
   if (!body) return;
 
@@ -3584,7 +3585,7 @@ function setAvatarImage(container, src, { withStatusDot = false } = {}) {
 function sanitizeMessageBody(body) {
   if (typeof body !== "string") return body;
   if (body.startsWith('{"v":1,') && body.includes('"iv"') && body.includes('"ct"')) {
-    return "🔒 Older message (sent before encryption was removed)";
+    return null;
   }
   return body;
 }
