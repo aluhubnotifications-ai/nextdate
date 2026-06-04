@@ -595,7 +595,41 @@ async function onSignedIn(user) {
   }
   await loadNotifications();
   subscribeNotifications();
+  subscribeDeckInvalidation();
   navigate("discover");
+}
+
+// ---------- Discover freshness ----------
+// Listen for INSERT / UPDATE on public.profiles (other users joining
+// or editing). We don't react in real time mid-swipe — that would
+// reshuffle the cards under the user. We just flag state.deckStale
+// so the next visit to Discover (or the next deck exhaustion) pulls
+// a fresh /suggestions response that includes the new people and
+// their updated scores.
+let profilesChannel = null;
+function subscribeDeckInvalidation() {
+  if (DEMO_MODE || !supabase || !state.user) return;
+  if (profilesChannel) { supabase.removeChannel(profilesChannel); profilesChannel = null; }
+  profilesChannel = supabase
+    .channel(`profiles-feed:${state.user.id}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "profiles" },
+      onProfileChange,
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "profiles" },
+      onProfileChange,
+    )
+    .subscribe();
+}
+
+function onProfileChange(payload) {
+  const row = payload.new || payload.old;
+  if (!row || !state.user) return;
+  if (row.id === state.user.id) return;
+  state.deckStale = true;
 }
 
 // ---------- notifications (DB-backed in real mode) ----------
@@ -727,7 +761,12 @@ function renderAuth(root) {
 
 async function doLogout() {
   if (DEMO_MODE) { toast("Demo mode — no real session to sign out of."); return; }
-  if (notifChannel) { supabase.removeChannel(notifChannel); notifChannel = null; }
+  if (notifChannel)    { supabase.removeChannel(notifChannel);    notifChannel = null; }
+  if (profilesChannel) { supabase.removeChannel(profilesChannel); profilesChannel = null; }
+  state.deck = null;
+  state.deckIndex = 0;
+  state.deckStale = false;
+  state.deckLoadedAt = 0;
   clearSession();
   state.user = null;
   setNavVisible(false);
@@ -918,6 +957,18 @@ function makeTagInput(container, initial) {
 async function renderDiscover(root) {
   root.append($("#tpl-discover").content.cloneNode(true));
   $("#refresh-discover").onclick = () => { state.deck = null; state.deckIndex = 0; loadDiscover(); };
+  // Fresh-enough check: if the realtime profiles subscription flagged
+  // the deck stale, or it's older than ~2 min, drop it so loadDiscover
+  // refetches. Mid-swipe sessions (deck still populated and recent)
+  // keep the user's position.
+  const TWO_MIN = 2 * 60 * 1000;
+  const stale = state.deckStale === true
+    || (state.deckLoadedAt && Date.now() - state.deckLoadedAt > TWO_MIN);
+  if (stale) {
+    state.deck = null;
+    state.deckIndex = 0;
+    state.deckStale = false;
+  }
   await loadDiscover();
 }
 
@@ -948,6 +999,7 @@ async function loadDiscover() {
   progressEnd();
 
   if (state.deck === null) {
+    state.deckLoadedAt = Date.now();
     let skip;
     if (DEMO_MODE) {
       skip = existingSessionPartners();
@@ -1170,6 +1222,14 @@ function advance() {
   if (!state.deck?.length) return;
   state.deck.splice(state.deckIndex, 1);
   if (state.deckIndex >= state.deck.length) state.deckIndex = 0;
+  if (state.deck.length === 0) {
+    // Exhausted the current deck — fetch a fresh batch so people
+    // who joined or edited their profile since we loaded show up,
+    // without making the user press ↻.
+    state.deck = null;
+    loadDiscover();
+    return;
+  }
   renderDeck();
 }
 
