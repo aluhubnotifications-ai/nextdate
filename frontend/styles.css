@@ -365,6 +365,7 @@ h1, h2, h3 { margin: 0 0 12px; color: var(--text); letter-spacing: -0.4px; }
 h1 { font-size: 28px; font-weight: 800; line-height: 1.18; }
 h2 { font-size: 20px; font-weight: 700; }
 .muted { color: var(--text-muted); }
+.req { color: #e0506a; font-weight: 700; margin-left: 2px; }
 .hr { height: 1px; background: var(--border); margin: 18px 0; }
 
 /* ============================================================

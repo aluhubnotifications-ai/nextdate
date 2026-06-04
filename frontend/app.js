@@ -808,11 +808,42 @@ function renderOnboarding(root) {
     root.scrollTo?.({ top: 0, behavior: "instant" });
     window.scrollTo?.({ top: 0, behavior: "instant" });
   };
+  const flushTagInputs = () => {
+    $("#interests-input")?.querySelector("input")?.dispatchEvent(new Event("blur"));
+    $("#hobbies-input")?.querySelector("input")?.dispatchEvent(new Event("blur"));
+  };
+  // Matching needs these to produce a meaningful score (interests + hobbies
+  // overlap, plus the two free-text fields for embedding-based scoring).
+  // Without them the suggestions endpoint has nothing to rank against, so
+  // we block step 2 → 3 and the final save until they're filled in.
+  const validateMatchingFields = () => {
+    flushTagInputs();
+    if (interests.values().length < 3) {
+      toast("Add at least 3 interests so we can find your people.");
+      return false;
+    }
+    if (hobbies.values().length < 2) {
+      toast("Add at least 2 hobbies so we can find your people.");
+      return false;
+    }
+    if (!$("#leisure_time").value.trim()) {
+      toast("Tell us how you spend your leisure time.");
+      return false;
+    }
+    if (!$("#wants_in_relationship").value.trim()) {
+      toast("Tell us what you want in a connection.");
+      return false;
+    }
+    return true;
+  };
   root.querySelectorAll("[data-next]").forEach((b) => b.addEventListener("click", () => {
     const target = Number(b.dataset.next);
     if (target === 2) {
       const nickname = $("#nickname").value.trim();
       if (!nickname) return toast("Pick a nickname so people can say hi.");
+    }
+    if (target === 3) {
+      if (!validateMatchingFields()) return;
     }
     goToStep(target);
   }));
@@ -880,6 +911,7 @@ function renderOnboarding(root) {
   $("#save-profile").onclick = async () => {
     const nickname = $("#nickname").value.trim();
     if (!nickname) return toast("Pick a nickname.");
+    if (!validateMatchingFields()) return;
 
     const profilePayload = {
       id: state.user.id,

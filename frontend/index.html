@@ -264,7 +264,7 @@
           <h1>Your public profile</h1>
           <p class="muted">This is what other people see in Discover. Anonymous on purpose.</p>
           <div class="row">
-            <div class="field"><label>Nickname</label><input id="nickname" placeholder="e.g. NightOwl" /></div>
+            <div class="field"><label>Nickname <span class="req">*</span></label><input id="nickname" placeholder="e.g. NightOwl" /></div>
             <div class="field"><label>Avatar</label>
               <select id="avatar_url">
                 <option value="🦊">🦊 Fox</option>
@@ -315,16 +315,16 @@
               </select>
             </div>
           </div>
-          <div class="field"><label>Interests <span class="muted" style="font-weight:400;">— press Enter to add each tag</span></label>
+          <div class="field"><label>Interests <span class="req">*</span> <span class="muted" style="font-weight:400;">— add at least 3, press Enter after each</span></label>
             <div class="tag-input" id="interests-input"><input placeholder="e.g. afrobeats, climate-tech" /></div>
           </div>
-          <div class="field"><label>Hobbies <span class="muted" style="font-weight:400;">— press Enter to add each tag</span></label>
+          <div class="field"><label>Hobbies <span class="req">*</span> <span class="muted" style="font-weight:400;">— add at least 2, press Enter after each</span></label>
             <div class="tag-input" id="hobbies-input"><input placeholder="e.g. salsa, chess" /></div>
           </div>
-          <div class="field"><label>How I spend leisure time</label>
+          <div class="field"><label>How I spend leisure time <span class="req">*</span></label>
             <textarea id="leisure_time" placeholder="A sentence or two..."></textarea>
           </div>
-          <div class="field"><label>What I want in a connection</label>
+          <div class="field"><label>What I want in a connection <span class="req">*</span></label>
             <textarea id="wants_in_relationship" placeholder="A sentence or two..."></textarea>
           </div>
         </div>
