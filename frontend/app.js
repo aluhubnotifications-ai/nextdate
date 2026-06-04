@@ -915,11 +915,11 @@ function renderOnboarding(root) {
   const pickClear   = $("#profile_picture_clear");
   const pickInput   = $("#profile_picture_file");
   function paintPicturePreview() {
-    if (state.profilePictureData) {
-      pickPreview.innerHTML = `<img src="${state.profilePictureData}" alt=""/>`;
+    if (setAvatarImage(pickPreview, state.profilePictureData)) {
       pickClear.hidden = false;
       pickBtn.textContent = "Change photo";
     } else {
+      state.profilePictureData = null;
       pickPreview.textContent = "🖼️";
       pickClear.hidden = true;
       pickBtn.textContent = "Upload photo";
@@ -934,7 +934,12 @@ function renderOnboarding(root) {
     if (!file.type.startsWith("image/")) { toast("Please pick an image."); return; }
     if (file.size > 2 * 1024 * 1024)   { toast("Image is larger than 2 MB."); return; }
     const reader = new FileReader();
-    reader.onload = () => { state.profilePictureData = reader.result; paintPicturePreview(); };
+    reader.onload = () => {
+      const safe = safeImageDataURL(reader.result);
+      if (!safe) { toast("That image format isn't supported. Try PNG, JPG, WebP, or GIF."); return; }
+      state.profilePictureData = safe;
+      paintPicturePreview();
+    };
     reader.onerror = () => toast("Couldn't read that file.");
     reader.readAsDataURL(file);
     ev.target.value = "";
@@ -1099,7 +1104,22 @@ async function loadDiscover() {
     suggestions = DEMO_USERS;
   } else {
     try {
-      suggestions = await api(`/suggestions/${state.user.id}`);
+      // Hand the matching engine everything it needs to score: the
+      // requester's intent + term, plus their interest/hobby vectors.
+      // Backend should: filter candidates by intent/term compatibility,
+      // score by Jaccard(interests) + Jaccard(hobbies) (and optionally
+      // embedding similarity on the two free-text fields), and return
+      // [{ user_id, nickname, avatar_url, gender, zodiac_sign,
+      //    interests, hobbies, score }] sorted by score desc.
+      suggestions = await api(`/suggestions/${state.user.id}`, {
+        method: "POST",
+        body: {
+          intent: state.prefs?.target_intent || null,
+          term_length: state.prefs?.term_length || null,
+          interests: state.prefs?.interests || [],
+          hobbies: state.prefs?.hobbies || [],
+        },
+      });
     } catch (err) {
       progressEnd();
       stack.innerHTML = `<div class="swipe-empty">Couldn't reach the matching engine.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
@@ -2970,23 +2990,29 @@ async function hydrateIdentity() {
     return;
   }
   // Replace the emoji avatar in the chat header and the info panel
-  // with the revealed photo if the user uploaded one.
-  if (id.profile_picture) {
-    const peerAv = $("#peer-avatar");
-    if (peerAv) peerAv.innerHTML = `<img src="${id.profile_picture}" alt=""/><span class="status-dot"></span>`;
-    const infoAv = $("#info-avatar");
-    if (infoAv) infoAv.innerHTML = `<img src="${id.profile_picture}" alt=""/><span class="status-dot"></span>`;
+  // with the revealed photo if the user uploaded one. setAvatarImage
+  // validates the dataURL prefix so a malicious profile_picture column
+  // can't smuggle <script>/<svg onload> via innerHTML.
+  const safePicture = safeImageDataURL(id.profile_picture);
+  if (safePicture) {
+    setAvatarImage($("#peer-avatar"), safePicture, { withStatusDot: true });
+    setAvatarImage($("#info-avatar"), safePicture, { withStatusDot: true });
   }
-  const picture = id.profile_picture
-    ? `<div class="identity-picture"><img src="${id.profile_picture}" alt=""/></div>`
-    : "";
   panel.innerHTML = `
-    ${picture}
     <div class="identity-row"><span>Real name</span><span>${escapeHtml(id.real_name || "—")}</span></div>
     <div class="identity-row"><span>Age</span><span>${id.age ?? "—"}</span></div>
     <div class="identity-row"><span>Country</span><span>${escapeHtml(id.country || "—")}</span></div>
     <div class="identity-row"><span>Cohort</span><span>${escapeHtml(id.cohort || "—")}</span></div>
   `;
+  if (safePicture) {
+    const wrap = document.createElement("div");
+    wrap.className = "identity-picture";
+    const img = document.createElement("img");
+    img.setAttribute("src", safePicture);
+    img.setAttribute("alt", "");
+    wrap.appendChild(img);
+    panel.insertBefore(wrap, panel.firstChild);
+  }
 }
 
 // ---------- NOTIFICATIONS ----------
@@ -3149,4 +3175,34 @@ function escapeHtml(v) {
   return String(v ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+
+// Only allow base64 image dataURLs we actually generate from the file
+// picker. Anything else (svg, javascript:, html:, raw text) is rejected
+// so a malicious profile_picture column can't smuggle script into the
+// avatar renderers via innerHTML.
+const _SAFE_IMG_DATAURL = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/]+=*$/;
+function safeImageDataURL(s) {
+  if (typeof s !== "string" || s.length > 3_000_000) return null;
+  return _SAFE_IMG_DATAURL.test(s) ? s : null;
+}
+
+// Render an avatar container as an <img> built with createElement +
+// setAttribute, never innerHTML. Optionally appends the presence dot.
+// Returns true if the image was rendered.
+function setAvatarImage(container, src, { withStatusDot = false } = {}) {
+  if (!container) return false;
+  const safe = safeImageDataURL(src);
+  if (!safe) return false;
+  container.textContent = "";
+  const img = document.createElement("img");
+  img.setAttribute("src", safe);
+  img.setAttribute("alt", "");
+  container.appendChild(img);
+  if (withStatusDot) {
+    const dot = document.createElement("span");
+    dot.className = "status-dot";
+    container.appendChild(dot);
+  }
+  return true;
 }
