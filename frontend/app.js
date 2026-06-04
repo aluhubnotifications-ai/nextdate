@@ -429,6 +429,38 @@ function skelMessages(body, n = 5) {
     </div>`).join("");
 }
 
+// Per-conversation unread counter, persisted across reloads. Driven by
+// the global realtime subscription on `public.messages` so the chat
+// sidebar shows a live badge when someone messages you in a conversation
+// that isn't currently open.
+const UNREAD_KEY = "nd_unread_by_session_v1";
+function loadUnreadFromStorage() {
+  try {
+    const raw = localStorage.getItem(UNREAD_KEY);
+    if (!raw) return new Map();
+    const obj = JSON.parse(raw);
+    return new Map(Object.entries(obj).map(([k, v]) => [k, Number(v) || 0]));
+  } catch { return new Map(); }
+}
+function persistUnread() {
+  try {
+    const obj = {};
+    for (const [k, v] of state.unreadBySession) if (v > 0) obj[k] = v;
+    localStorage.setItem(UNREAD_KEY, JSON.stringify(obj));
+  } catch { /* noop */ }
+}
+function bumpUnread(sessionId) {
+  const n = (state.unreadBySession.get(sessionId) || 0) + 1;
+  state.unreadBySession.set(sessionId, n);
+  persistUnread();
+}
+function clearUnread(sessionId) {
+  if (state.unreadBySession.has(sessionId)) {
+    state.unreadBySession.delete(sessionId);
+    persistUnread();
+  }
+}
+
 const state = {
   user: null,
   profile: null,
@@ -438,6 +470,9 @@ const state = {
   messagesChannel: null,
   sessionChannel: null,
   notifications: DEMO_NOTIFICATIONS.slice(),
+  unreadBySession: loadUnreadFromStorage(),
+  lastMessageBySession: new Map(),
+  knownSessionIds: new Set(),
   liked: new Set(),
   passed: new Set(),
   deck: null,
@@ -528,12 +563,9 @@ function unreadCount() {
 }
 
 function unreadChatCount() {
-  // Demo: count distinct sessions referenced by unread message notifications
-  const ids = new Set();
-  for (const n of state.notifications) {
-    if (n.unread && n.kind === "message" && n.session_id) ids.add(n.session_id);
-  }
-  return ids.size;
+  let n = 0;
+  for (const v of state.unreadBySession.values()) if (v > 0) n++;
+  return n;
 }
 
 function matchCount() {
@@ -696,8 +728,7 @@ async function onSignedIn(user) {
   if (!state.profile || !state.prefs) {
     return navigate("onboarding");
   }
-  await loadNotifications();
-  subscribeNotifications();
+  subscribeGlobalMessages();
   subscribeDeckInvalidation();
   subscribePresence();
   startHeartbeat();
@@ -901,6 +932,56 @@ function paintPresence() {
   });
 }
 
+// Global subscription to every INSERT on public.messages. RLS already
+// filters delivery to rooms the user is in, so we just react to each
+// row: increment unread for inactive sessions, and trigger a sidebar
+// repaint so the latest-message preview + badge update live.
+let globalMessagesChannel = null;
+function subscribeGlobalMessages() {
+  if (DEMO_MODE || !supabase || !state.user) return;
+  if (globalMessagesChannel) { supabase.removeChannel(globalMessagesChannel); globalMessagesChannel = null; }
+  globalMessagesChannel = supabase
+    .channel(`messages-global:${state.user.id}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages" },
+      onAnyMessageInsert,
+    )
+    .subscribe();
+}
+
+let _sessionRepaintTimer = null;
+function scheduleSidebarRepaint() {
+  if (!document.getElementById("session-list")) return;
+  if (_sessionRepaintTimer) return;
+  _sessionRepaintTimer = setTimeout(() => {
+    _sessionRepaintTimer = null;
+    loadSessions();
+  }, 250);
+}
+
+async function onAnyMessageInsert(payload) {
+  const m = payload.new;
+  if (!m || m.sender_id === state.user?.id) return;
+  // Active conversation is handled by its own per-session subscription
+  // — don't double-bump unread for messages the user is already seeing.
+  if (state.activeSession?.id !== m.session_id) {
+    bumpUnread(m.session_id);
+    refreshBadges();
+  }
+  // Update the cached "last message" preview for this session, then
+  // repaint the sidebar so the user sees the new copy + time + badge.
+  try { await decryptMessageInPlace(m); } catch { /* leave as-is */ }
+  state.lastMessageBySession.set(m.session_id, m);
+  // If we don't yet know about this session (e.g. someone just opened
+  // a new match), pulling sessions fresh will discover it.
+  if (!state.knownSessionIds.has(m.session_id)) {
+    scheduleSidebarRepaint();
+    return;
+  }
+  scheduleSidebarRepaint();
+}
+
 let notifChannel = null;
 function subscribeNotifications() {
   if (DEMO_MODE || !supabase || !state.user) return;
@@ -1003,9 +1084,10 @@ function renderAuth(root) {
 
 async function doLogout() {
   if (DEMO_MODE) { toast("Demo mode — no real session to sign out of."); return; }
-  if (notifChannel)    { supabase.removeChannel(notifChannel);    notifChannel = null; }
-  if (profilesChannel) { supabase.removeChannel(profilesChannel); profilesChannel = null; }
-  if (presenceChannel) { supabase.removeChannel(presenceChannel); presenceChannel = null; }
+  if (notifChannel)          { supabase.removeChannel(notifChannel);          notifChannel = null; }
+  if (globalMessagesChannel) { supabase.removeChannel(globalMessagesChannel); globalMessagesChannel = null; }
+  if (profilesChannel)       { supabase.removeChannel(profilesChannel);       profilesChannel = null; }
+  if (presenceChannel)       { supabase.removeChannel(presenceChannel);       presenceChannel = null; }
   state.onlineUsers.clear();
   state.peerLastSeen.clear();
   state.sessionKeys.clear();
@@ -2169,13 +2251,31 @@ async function loadSessions() {
       .select("id, nickname, avatar_url, last_seen")
       .in("id", peerIds);
     peerMap = Object.fromEntries((peers || []).map((p) => [p.id, p]));
-    // Feed the last_seen value into peerLastSeen so paintPresence can
-    // show "Active 5m ago" even when the realtime presence channel
-    // doesn't currently report the peer.
     for (const p of peers || []) {
       if (p.last_seen) state.peerLastSeen.set(p.id, p.last_seen);
     }
+    // Pull the most recent message per session for the sidebar preview +
+    // timestamp. One query, then bucket client-side by session_id.
+    const sessionIds = data.map((s) => s.id);
+    if (sessionIds.length) {
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("session_id, sender_id, body, created_at")
+        .in("session_id", sessionIds)
+        .order("created_at", { ascending: false })
+        .limit(sessionIds.length * 5);
+      const lastBySession = new Map();
+      for (const m of msgs || []) {
+        if (!lastBySession.has(m.session_id)) lastBySession.set(m.session_id, m);
+      }
+      for (const m of lastBySession.values()) await decryptMessageInPlace(m);
+      state.lastMessageBySession = lastBySession;
+    }
   }
+  // Remember which sessions belong to me so the global message
+  // subscription can ignore inserts on rooms I'm not in (defensive —
+  // RLS already filters realtime delivery).
+  state.knownSessionIds = new Set(data.map((s) => s.id));
 
   // Drop the skeleton rows before painting the real list — otherwise
   // skelSessionList's placeholders sit at the top of #session-list
@@ -2186,23 +2286,24 @@ async function loadSessions() {
     const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
     const peer = peerMap[peerId] || { nickname: "Unknown", avatar_url: "🦊" };
 
-    // Last message preview + time (demo-mode only, real mode would query)
+    // Last message preview + time
     let preview = "Say hi 👋", lastTime = "";
+    let last;
     if (DEMO_MODE) {
       const msgs = DEMO_MESSAGES[s.id] || [];
-      const last = msgs[msgs.length - 1];
-      if (last) {
-        preview = (last.sender_id === state.user.id ? "You: " : "") + last.body;
-        lastTime = formatRelativeTime(last.created_at);
-      }
+      last = msgs[msgs.length - 1];
+    } else {
+      last = state.lastMessageBySession.get(s.id);
     }
-    const unread = state.notifications.filter(
-      (n) => n.unread && n.kind === "message" && n.session_id === s.id,
-    ).length;
+    if (last) {
+      preview = (last.sender_id === state.user.id ? "You: " : "") + (last.body || "");
+      lastTime = formatRelativeTime(last.created_at);
+    }
+    const unread = state.unreadBySession.get(s.id) || 0;
     const revealed = s.user_a_approved_reveal && s.user_b_approved_reveal;
 
     const row = document.createElement("div");
-    row.className = "session-item";
+    row.className = "session-item" + (unread ? " has-unread" : "");
     row.dataset.sessionId = s.id;
     row.dataset.peerName = peer.nickname || "";
     row.innerHTML = `
@@ -2220,6 +2321,12 @@ async function loadSessions() {
       </div>`;
     row.onclick = () => openSession(s.id);
     list.appendChild(row);
+  }
+  // Keep the active-session highlight after a repaint (e.g. when the
+  // global message subscription triggers loadSessions while a chat is open).
+  if (state.activeSession?.id) {
+    list.querySelector(`.session-item[data-session-id="${state.activeSession.id}"]`)
+      ?.classList.add("active");
   }
   paintPresence();
 }
@@ -2322,23 +2429,11 @@ async function openSession(sessionId) {
   const sidEl = $("#peer-session-id");
   if (sidEl) sidEl.textContent = `#${sessionId.slice(0, 8)}`;
 
-  // Mark associated unread message notifications as read
-  let touched = false;
-  for (const n of state.notifications) {
-    if (n.unread && n.kind === "message" && n.session_id === sessionId) {
-      n.unread = false; touched = true;
-    }
-  }
-  if (touched) refreshBadges();
-  if (touched && !DEMO_MODE && state.user) {
-    supabase.from("notifications")
-      .update({ unread: false })
-      .eq("user_id", state.user.id)
-      .eq("session_id", sessionId)
-      .eq("kind", "message")
-      .eq("unread", true)
-      .then(() => {});
-  }
+  // Opening a conversation clears its unread badge in the sidebar.
+  clearUnread(sessionId);
+  refreshBadges();
+  document.querySelector(`.session-item[data-session-id="${sessionId}"]`)
+    ?.classList.remove("has-unread");
 
   await loadMessages(sessionId);
   await refreshRevealState();

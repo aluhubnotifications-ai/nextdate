@@ -747,6 +747,9 @@ textarea { min-height: 88px; resize: vertical; }
   display: inline-flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 12px var(--brand-glow);
 }
+.session-item.has-unread .session-name { font-weight: 800; }
+.session-item.has-unread .session-preview { color: var(--text); font-weight: 600; }
+.session-item.has-unread .session-time { color: var(--brand); font-weight: 700; }
 
 /* ============================================================
    CHAT MAIN
