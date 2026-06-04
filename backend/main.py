@@ -240,7 +240,7 @@ def get_curated_suggestions(
         intent_bonus = 4 if my_intent and r.get("target_intent") == my_intent else 0
         term_bonus = 2 if my_term and r.get("term_length") == my_term else 0
         raw = 2 * common_i + common_h + intent_bonus + term_bonus
-        pct = (raw / max_raw) * 100.0
+        pct = min(100.0, (raw / max(1, max_raw)) * 100.0)
         scored.append((round(pct, 1), r["user_id"]))
 
     scored.sort(key=lambda x: x[0], reverse=True)

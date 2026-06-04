@@ -726,6 +726,7 @@ async function onSignedIn(user) {
   if (!state.profile || !state.prefs) {
     return navigate("onboarding");
   }
+  await loadBlockedUsers();
   await loadNotifications();
   subscribeNotifications();
   subscribeGlobalMessages();
@@ -1623,6 +1624,14 @@ function attachSwipe(card) {
   card.addEventListener("pointermove", onMove);
   card.addEventListener("pointerup", onUp);
   card.addEventListener("pointercancel", onUp);
+
+  // Keyboard support: ArrowRight to like, ArrowLeft to pass.
+  card.setAttribute("tabindex", "0");
+  card.setAttribute("role", "button");
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") { e.preventDefault(); likeCurrent(card); }
+    if (e.key === "ArrowLeft")  { e.preventDefault(); passCurrent(card); }
+  });
 }
 
 function flyAway(card, direction, after = advance) {
@@ -2084,12 +2093,17 @@ function onInfoAction(act) {
         icon: "🚫",
         okLabel: "Block",
         okClass: "danger",
-        onConfirm: () => {
+        onConfirm: async () => {
           state.blockedUsers.add(s.peer_id);
           if (DEMO_MODE) {
             const i = DEMO_SESSIONS.findIndex((x) => x.id === s.id);
             if (i >= 0) DEMO_SESSIONS.splice(i, 1);
             delete DEMO_MESSAGES[s.id];
+          } else {
+            await supabase.from("blocked_users").upsert(
+              { blocker_id: state.user.id, blocked_id: s.peer_id },
+              { onConflict: "blocker_id,blocked_id" }
+            );
           }
           closeInfoPanel();
           closeActiveChat();
@@ -2102,6 +2116,16 @@ function onInfoAction(act) {
       openReportModal();
       break;
   }
+}
+
+async function loadBlockedUsers() {
+  if (DEMO_MODE || !supabase || !state.user) return;
+  state.blockedUsers = state.blockedUsers || new Set();
+  const { data } = await supabase
+    .from("blocked_users")
+    .select("blocked_id")
+    .eq("blocker_id", state.user.id);
+  for (const row of data || []) state.blockedUsers.add(row.blocked_id);
 }
 
 // ---------- report modal ----------
@@ -2123,10 +2147,23 @@ function closeReportModal() {
   m?.classList.add("hidden");
   m?.setAttribute("aria-hidden", "true");
 }
-function submitReport() {
+async function submitReport() {
   const reason = document.querySelector('#report-reasons input:checked')?.value;
   if (!reason) { toast("Pick a reason first."); return; }
+  const details = ($("#report-details")?.value || "").trim();
   closeReportModal();
+  if (!DEMO_MODE && supabase && state.activeSession) {
+    const peerId = state.activeSession.user_a === state.user.id
+      ? state.activeSession.user_b
+      : state.activeSession.user_a;
+    await supabase.from("reports").insert({
+      reporter_id: state.user.id,
+      reported_id: peerId,
+      session_id: state.activeSession.id,
+      reason,
+      details: details || null,
+    });
+  }
   toast("Report sent. Our team will review within 24h.");
 }
 
@@ -3341,7 +3378,7 @@ async function refreshRevealState() {
     panel.classList.remove("hidden");
   } else if (myFlag && !theirFlag) {
     banner.classList.add("locked");
-    text.textContent = "Waiting for match… they haven't revealed yet.";
+    text.textContent = "Waiting for them to reveal their identity.";
     btn.classList.add("hidden");
     panel.classList.add("hidden");
   } else if (!myFlag && theirFlag) {
@@ -3659,7 +3696,7 @@ function startHeartbeat() {
     if (!supabase || !state.user) return;
     try {
       await supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("id", state.user.id);
-    } catch (e) { /* schema may not have the column yet — ignore */ }
+    } catch (e) { console.warn("[heartbeat] last_seen update failed:", e?.message ?? e); }
   };
   beat();
   startHeartbeat._timer = setInterval(beat, 60_000);
