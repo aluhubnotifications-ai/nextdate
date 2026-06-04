@@ -471,6 +471,25 @@ textarea { min-height: 88px; resize: vertical; }
   display: none;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
 }
+.toast.with-action {
+  align-items: center;
+  gap: 14px;
+  padding: 10px 10px 10px 18px;
+}
+.toast .toast-text { white-space: nowrap; }
+.toast .toast-action {
+  border: 0;
+  background: var(--accent, #FF8A5B);
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 12.5px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.toast .toast-action:hover { filter: brightness(1.08); }
 
 /* ============================================================
    DISCOVER GRID — denser, fills wide screens

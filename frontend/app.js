@@ -253,9 +253,43 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const toast = (msg, ms = 2400) => {
   const el = $("#toast");
   el.textContent = msg;
+  el.classList.remove("with-action");
   el.style.display = "block";
   clearTimeout(toast._t);
   toast._t = setTimeout(() => (el.style.display = "none"), ms);
+};
+
+// Toast with a single inline action button (e.g. Undo). Resolves to
+// true if the user clicks the action before `ms` expires, false if it
+// times out. Auto-dismiss is paused while the toast is hovered so the
+// user has time to react.
+const actionToast = ({ msg, actionLabel = "Undo", ms = 5000 }) => {
+  const el = $("#toast");
+  clearTimeout(toast._t);
+  return new Promise((resolve) => {
+    el.classList.add("with-action");
+    el.innerHTML = "";
+    const text = document.createElement("span");
+    text.className = "toast-text";
+    text.textContent = msg;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "toast-action";
+    btn.textContent = actionLabel;
+    el.append(text, btn);
+    el.style.display = "inline-flex";
+    let timer = setTimeout(done, ms);
+    function done(actioned = false) {
+      clearTimeout(timer);
+      el.style.display = "none";
+      el.classList.remove("with-action");
+      el.innerHTML = "";
+      resolve(actioned);
+    }
+    btn.onclick = () => done(true);
+    el.onmouseenter = () => clearTimeout(timer);
+    el.onmouseleave = () => { timer = setTimeout(done, ms); };
+  });
 };
 
 // ---------- loading affordances ----------
@@ -367,6 +401,7 @@ const state = {
   deck: null,
   deckIndex: 0,
   replyTo: null,
+  pendingUnmatch: new Set(),
 };
 
 // In DEMO mode, treat these users as already-liking-you-back, so
@@ -1624,32 +1659,56 @@ function onInfoAction(act) {
         },
       });
       break;
-    case "delete":
+    case "unmatch":
       openConfirmModal({
-        title: "Delete this conversation?",
-        text: `This permanently removes your chat with ${peerName}. You can still rematch later.`,
-        icon: "🗑️",
-        okLabel: "Delete forever",
+        title: `Unmatch ${peerName}?`,
+        text: "Your chat and the match itself will be removed. You'll both be able to rediscover each other in Discover.",
+        icon: "💔",
+        okLabel: "Unmatch",
         okClass: "danger",
         onConfirm: async () => {
+          // Optimistic: hide the chat from the UI immediately, then
+          // give the user a 5s Undo window before the destructive
+          // call goes through. On Undo we just drop the pending flag
+          // and reload; on timeout we commit the unmatch.
+          const sessionId = s.id;
+          state.pendingUnmatch.add(sessionId);
+          closeInfoPanel();
+          closeActiveChat();
+          loadSessions();
+          const undone = await actionToast({
+            msg: `Unmatched ${peerName}.`,
+            actionLabel: "Undo",
+            ms: 5000,
+          });
+          if (undone) {
+            state.pendingUnmatch.delete(sessionId);
+            loadSessions();
+            toast("Match restored.");
+            return;
+          }
+          // Window expired — commit the destructive change.
           if (DEMO_MODE) {
-            const i = DEMO_SESSIONS.findIndex((x) => x.id === s.id);
+            const i = DEMO_SESSIONS.findIndex((x) => x.id === sessionId);
             if (i >= 0) DEMO_SESSIONS.splice(i, 1);
-            delete DEMO_MESSAGES[s.id];
+            delete DEMO_MESSAGES[sessionId];
+            state.deck = null;
+            state.deckIndex = 0;
           } else {
             // unmatch_session deletes the chat_sessions row (cascade
             // takes messages + notifications) AND the two likes rows
             // for the pair, so both of you can rediscover each other
             // in Discover instead of being permanently skip-filtered.
-            const { error } = await supabase.rpc("unmatch_session", { session: s.id });
-            if (error) return toast(error.message);
+            const { error } = await supabase.rpc("unmatch_session", { session: sessionId });
+            if (error) {
+              state.pendingUnmatch.delete(sessionId);
+              loadSessions();
+              return toast(error.message);
+            }
             state.deck = null;
             state.deckIndex = 0;
           }
-          closeInfoPanel();
-          closeActiveChat();
-          loadSessions();
-          toast("Conversation deleted.");
+          state.pendingUnmatch.delete(sessionId);
         },
       });
       break;
@@ -1807,6 +1866,11 @@ async function loadSessions() {
     progressEnd();
     if (res.error) { list.innerHTML = ""; return toast(res.error.message); }
     data = res.data;
+  }
+  // Hide sessions the user has just unmatched but where the Undo
+  // window hasn't closed yet — they get rehydrated if Undo is tapped.
+  if (state.pendingUnmatch.size) {
+    data = data.filter((s) => !state.pendingUnmatch.has(s.id));
   }
   if (!data?.length) {
     list.innerHTML = `<div class="muted" style="font-size:13px;">No chats yet.</div>`;
