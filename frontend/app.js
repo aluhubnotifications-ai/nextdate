@@ -1299,25 +1299,39 @@ function existingSessionPartners() {
 // Fallback when the matching backend returns no suggestions (e.g. a brand-
 // new user has no features yet). Pulls every other profile straight from
 // Supabase so the deck is never empty just because the engine is cold.
+// interests/hobbies live on match_preferences, not profiles — fetched
+// separately and joined in JS.
 async function loadProfilesFallback() {
   if (!supabase || !state.user) return [];
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, nickname, avatar_url, gender, zodiac_sign, interests, hobbies")
-    .neq("id", state.user.id);
-  if (error) {
-    console.warn("[discover] profiles fallback failed:", error.message);
+  const [{ data: profs, error: pErr }, { data: prefs, error: prErr }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, nickname, avatar_url, gender, zodiac_sign")
+      .neq("id", state.user.id),
+    supabase
+      .from("match_preferences")
+      .select("user_id, interests, hobbies"),
+  ]);
+  if (pErr) {
+    console.warn("[discover] profiles fallback failed:", pErr.message);
     return [];
   }
-  return (data || []).map((p) => ({
-    user_id: p.id,
-    nickname: p.nickname,
-    avatar_url: p.avatar_url,
-    gender: p.gender,
-    zodiac_sign: p.zodiac_sign,
-    interests: p.interests || [],
-    hobbies: p.hobbies || [],
-  }));
+  if (prErr) {
+    console.warn("[discover] match_preferences fetch failed:", prErr.message);
+  }
+  const tagsById = new Map((prefs || []).map((p) => [p.user_id, p]));
+  return (profs || []).map((p) => {
+    const t = tagsById.get(p.id) || {};
+    return {
+      user_id: p.id,
+      nickname: p.nickname,
+      avatar_url: p.avatar_url,
+      gender: p.gender,
+      zodiac_sign: p.zodiac_sign,
+      interests: t.interests || [],
+      hobbies: t.hobbies || [],
+    };
+  });
 }
 
 async function loadDiscover() {
