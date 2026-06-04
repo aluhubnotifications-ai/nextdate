@@ -259,6 +259,48 @@ const toast = (msg, ms = 2400) => {
   toast._t = setTimeout(() => (el.style.display = "none"), ms);
 };
 
+// Rich, animated notification banner that slides in from the top so a
+// new message / match / reveal actually feels like a push, not a tiny
+// bubble at the bottom. Auto-dismisses after `ms`, or sooner if the
+// user clicks. If `onClick` is provided, clicking the body invokes it
+// (and then dismisses); the close button always just dismisses.
+function pushToast({ icon = "🔔", title, text = "", ms = 6000, onClick } = {}) {
+  let host = document.getElementById("nd-push-host");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "nd-push-host";
+    document.body.appendChild(host);
+  }
+  const card = document.createElement("div");
+  card.className = "nd-push";
+  card.innerHTML = `
+    <div class="nd-push-icon" aria-hidden="true"></div>
+    <div class="nd-push-body">
+      <div class="nd-push-title"></div>
+      <div class="nd-push-text"></div>
+    </div>
+    <button class="nd-push-close" aria-label="Dismiss">×</button>`;
+  card.querySelector(".nd-push-icon").textContent = icon;
+  card.querySelector(".nd-push-title").textContent = title || "";
+  card.querySelector(".nd-push-text").textContent = text || "";
+  host.appendChild(card);
+  requestAnimationFrame(() => card.classList.add("show"));
+  let timer = setTimeout(dismiss, ms);
+  function dismiss() {
+    clearTimeout(timer);
+    card.classList.remove("show");
+    card.addEventListener("transitionend", () => card.remove(), { once: true });
+    setTimeout(() => card.remove(), 400);
+  }
+  card.querySelector(".nd-push-close").onclick = (e) => { e.stopPropagation(); dismiss(); };
+  if (onClick) {
+    card.classList.add("clickable");
+    card.onclick = () => { try { onClick(); } finally { dismiss(); } };
+  }
+  card.addEventListener("mouseenter", () => clearTimeout(timer));
+  card.addEventListener("mouseleave", () => { timer = setTimeout(dismiss, ms); });
+}
+
 // Toast with a single inline action button (e.g. Undo). Resolves to
 // true if the user clicks the action before `ms` expires, false if it
 // times out. Auto-dismiss is paused while the toast is hovered so the
@@ -402,6 +444,8 @@ const state = {
   deckIndex: 0,
   replyTo: null,
   pendingUnmatch: new Set(),
+  onlineUsers: new Set(),
+  currentView: null,
 };
 
 // In DEMO mode, treat these users as already-liking-you-back, so
@@ -422,7 +466,7 @@ const views = {
   logout: doLogout,
 };
 
-async function navigate(name) {
+async function navigate(name, opts = {}) {
   cleanupRealtime();
   const root = $("#view-root");
   root.innerHTML = "";
@@ -442,8 +486,26 @@ async function navigate(name) {
     b.classList.toggle("active", b.dataset.view === name),
   );
   closeDrawer();
+  // Wire browser history so the back button returns to the previous
+  // view inside the app instead of leaving the SPA. The very first
+  // navigate after page load replaces the empty initial entry rather
+  // than pushing on top of it; popstate-driven navigates don't touch
+  // history at all.
+  const isFirstNav = state.currentView === null;
+  state.currentView = name;
+  if (!opts.fromHistory) {
+    const url = `#${name}`;
+    if (isFirstNav || opts.replace) history.replaceState({ view: name }, "", url);
+    else history.pushState({ view: name }, "", url);
+  }
   await views[name](root);
 }
+
+window.addEventListener("popstate", (ev) => {
+  const view = ev.state?.view;
+  if (!view || !views[view]) return;
+  navigate(view, { fromHistory: true });
+});
 
 document.querySelectorAll("[data-view]").forEach((b) =>
   b.addEventListener("click", () => navigate(b.dataset.view)),
@@ -577,6 +639,8 @@ function initTheme() {
     state.prefs           = DEMO_ME.prefs;
     state.privateIdentity = DEMO_ME.private;
     setNavVisible(true);
+    subscribePresence();
+    startDemoNotificationSimulator();
     return navigate("discover");
   }
 
@@ -631,6 +695,7 @@ async function onSignedIn(user) {
   await loadNotifications();
   subscribeNotifications();
   subscribeDeckInvalidation();
+  subscribePresence();
   navigate("discover");
 }
 
@@ -711,6 +776,106 @@ async function loadNotifications() {
   refreshBadges();
 }
 
+// Demo-mode push notification simulator. The realtime channel only
+// fires when DEMO_MODE is false, so without this the user can never
+// actually see a "push" arrive in a local demo. Every 25–35 seconds we
+// pick a random demo user + kind and synthesize one push. The timer
+// id lives on the function itself to dodge any TDZ ordering with the
+// init() IIFE that calls us.
+function startDemoNotificationSimulator() {
+  if (!DEMO_MODE) return;
+  if (startDemoNotificationSimulator._timer) clearTimeout(startDemoNotificationSimulator._timer);
+  const tick = () => {
+    const pool = DEMO_USERS;
+    if (pool.length) {
+      const peer = pool[Math.floor(Math.random() * pool.length)];
+      const kinds = [
+        { icon: "💬", title: `New message from ${peer.nickname}`, text: '"hey, you around?"', kind: "message" },
+        { icon: "💖", title: `It's a match — ${peer.nickname}`, text: `${peer.score || 80}% compatibility`, kind: "match" },
+        { icon: "🔓", title: `${peer.nickname} approved reveal`, text: "Tap to see who they are.", kind: "reveal" },
+      ];
+      const n = kinds[Math.floor(Math.random() * kinds.length)];
+      pushToast({ icon: n.icon, title: n.title, text: n.text });
+      // Also add to the in-app notifications list so the badge counter ticks up.
+      state.notifications.unshift({
+        id: `demo-${Date.now()}`,
+        kind: n.kind,
+        icon: n.icon,
+        title: n.title,
+        text: n.text,
+        time: "just now",
+        group: "today",
+        unread: true,
+        session_id: null,
+      });
+      refreshBadges();
+      if (document.getElementById("notifications-list")) paintNotifications();
+    }
+    startDemoNotificationSimulator._timer = setTimeout(tick, 25_000 + Math.random() * 10_000);
+  };
+  startDemoNotificationSimulator._timer = setTimeout(tick, 8000);
+}
+
+// ---------- presence (real online status) ----------
+// Supabase Presence channel keyed by user_id. Every signed-in client
+// tracks itself on join; we keep state.onlineUsers in sync from the
+// channel's sync/join/leave events and repaint dots/labels whenever
+// the set changes. In demo mode there's no realtime, so we seed a
+// random subset of DEMO_USERS as online once at startup.
+let presenceChannel = null;
+function subscribePresence() {
+  if (DEMO_MODE) {
+    // Pick ~50% of demo users as "online" so the dot variation is
+    // visible. Always include at least one chat-session peer so the
+    // user can actually see an "online" indicator in their chat list.
+    const pool = DEMO_USERS.map((u) => u.user_id);
+    for (const id of pool) if (Math.random() < 0.5) state.onlineUsers.add(id);
+    const sessionPeers = DEMO_SESSIONS
+      .map((s) => (s.user_a === DEMO_ME.id ? s.user_b : s.user_a))
+      .filter(Boolean);
+    if (sessionPeers.length && !sessionPeers.some((id) => state.onlineUsers.has(id))) {
+      state.onlineUsers.add(sessionPeers[0]);
+    }
+    paintPresence();
+    return;
+  }
+  if (!supabase || !state.user) return;
+  if (presenceChannel) { supabase.removeChannel(presenceChannel); presenceChannel = null; }
+  presenceChannel = supabase.channel("presence:nextdate", {
+    config: { presence: { key: state.user.id } },
+  });
+  const syncFromChannel = () => {
+    const next = new Set();
+    const stateObj = presenceChannel.presenceState() || {};
+    for (const key of Object.keys(stateObj)) next.add(key);
+    state.onlineUsers = next;
+    paintPresence();
+  };
+  presenceChannel
+    .on("presence", { event: "sync" }, syncFromChannel)
+    .on("presence", { event: "join" }, syncFromChannel)
+    .on("presence", { event: "leave" }, syncFromChannel)
+    .subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await presenceChannel.track({ user_id: state.user.id, at: Date.now() });
+      }
+    });
+}
+
+// Repaint every avatar status dot and chat-header presence pill based
+// on state.onlineUsers. Each renderer stamps the peer id onto the dot
+// container via data-presence-user so we can flip classes without
+// re-rendering the whole view.
+function paintPresence() {
+  document.querySelectorAll("[data-presence-user]").forEach((el) => {
+    const id = el.dataset.presenceUser;
+    const online = id && state.onlineUsers.has(id);
+    el.classList.toggle("is-online", !!online);
+    const label = el.querySelector("[data-presence-label]");
+    if (label) label.textContent = online ? "Active now" : "Offline";
+  });
+}
+
 let notifChannel = null;
 function subscribeNotifications() {
   if (DEMO_MODE || !supabase || !state.user) return;
@@ -740,7 +905,12 @@ function onNotificationInsert(payload) {
     supabase.from("notifications").update({ unread: false }).eq("id", n.id)
       .then(() => {});
   } else {
-    toast(`${n.icon} ${n.title}`);
+    pushToast({
+      icon: n.icon,
+      title: n.title,
+      text: n.text,
+      onClick: n.session_id ? () => openSession(n.session_id) : undefined,
+    });
   }
   state.notifications.unshift(n);
   refreshBadges();
@@ -814,6 +984,8 @@ async function doLogout() {
   if (DEMO_MODE) { toast("Demo mode — no real session to sign out of."); return; }
   if (notifChannel)    { supabase.removeChannel(notifChannel);    notifChannel = null; }
   if (profilesChannel) { supabase.removeChannel(profilesChannel); profilesChannel = null; }
+  if (presenceChannel) { supabase.removeChannel(presenceChannel); presenceChannel = null; }
+  state.onlineUsers.clear();
   state.deck = null;
   state.deckIndex = 0;
   state.deckStale = false;
@@ -1637,7 +1809,10 @@ function paintInfoPanel() {
   const s = state.activeSession;
   if (!s) return;
   const peer = s.peer_profile || {};
-  $("#info-avatar").innerHTML = `${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span>`;
+  const infoAv = $("#info-avatar");
+  infoAv.innerHTML = `${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span>`;
+  infoAv.dataset.presenceUser = s.peer_id || peer.id || "";
+  paintPresence();
   $("#info-name").textContent = peer.nickname || "Unknown";
   $("#info-meta").textContent = [peer.gender, peer.zodiac_sign].filter(Boolean).join(" · ") || "—";
   const revealed = s.user_a_approved_reveal && s.user_b_approved_reveal;
@@ -1938,7 +2113,7 @@ async function loadSessions() {
     row.dataset.sessionId = s.id;
     row.dataset.peerName = peer.nickname || "";
     row.innerHTML = `
-      <div class="avatar">${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span></div>
+      <div class="avatar" data-presence-user="${escapeHtml(peerId)}">${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span></div>
       <div class="session-body">
         <div class="session-top">
           <div class="session-name">${escapeHtml(peer.nickname)}</div>
@@ -1953,6 +2128,7 @@ async function loadSessions() {
     row.onclick = () => openSession(s.id);
     list.appendChild(row);
   }
+  paintPresence();
 }
 
 function formatRelativeTime(iso) {
@@ -2036,10 +2212,15 @@ async function openSession(sessionId) {
   $("#chat-empty").classList.add("hidden");
   $("#chat-active").classList.remove("hidden");
 
-  $("#peer-avatar").innerHTML = `${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span>`;
+  const peerAv = $("#peer-avatar");
+  peerAv.innerHTML = `${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span>`;
+  peerAv.dataset.presenceUser = peer.id || "";
   $("#peer-name").textContent = peer.nickname;
   const metaParts = [peer.gender, peer.zodiac_sign].filter(Boolean).map(escapeHtml).join(" · ");
-  $("#peer-meta").innerHTML = `<span class="online"></span> Active now${metaParts ? " · " + metaParts : ""}`;
+  const peerMeta = $("#peer-meta");
+  peerMeta.innerHTML = `<span class="online"></span> <span data-presence-label>Offline</span>${metaParts ? " · " + metaParts : ""}`;
+  peerMeta.dataset.presenceUser = peer.id || "";
+  paintPresence();
   const sidEl = $("#peer-session-id");
   if (sidEl) sidEl.textContent = `#${sessionId.slice(0, 8)}`;
 
