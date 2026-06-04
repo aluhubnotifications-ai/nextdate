@@ -993,9 +993,9 @@ function onNotificationInsert(payload) {
     supabase.from("notifications").update({ unread: false }).eq("id", n.id).then(() => {});
   }
 
+  // Match notification → show overlay for the first liker (who was waiting).
+  // The person who completed the match already sees the overlay via the RPC.
   if (n.kind === "match" && n.session_id && n.actor_id) {
-    // The other person liked back → show the match overlay for the first liker.
-    // The person who completed the match already sees it via the RPC response.
     supabase.from("profiles").select("nickname,avatar_url").eq("id", n.actor_id).maybeSingle()
       .then(({ data: peer }) => {
         showMatchOverlay(
@@ -1004,7 +1004,7 @@ function onNotificationInsert(payload) {
         );
       });
   } else if (n.kind !== "message") {
-    // Reveals, likes, system → push toast.
+    // Likes, reveals, system → push toast.
     pushToast({
       icon: n.icon,
       title: n.title,
@@ -1664,24 +1664,14 @@ function likeCurrent(card) {
   state.liked.add(user.user_id);
 
   if (DEMO_MODE) {
-    if (DEMO_MUTUAL_FANS.has(user.user_id)) {
-      handleMutualMatch(user);
-    } else {
-      toast(`You liked ${user.nickname}! Head to Chats to message them.`);
-    }
+    if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
   } else {
-    // like_user now always returns {session_id, is_mutual}.
-    // is_mutual = true  → both liked → show match overlay.
-    // is_mutual = false → one-sided → chat is open, they can message now.
+    // like_user returns the chat_sessions id when both sides have liked
+    // (mutual match), otherwise null. Card flies away immediately for
+    // snappy UX; overlay only appears on a genuine mutual match.
     supabase.rpc("like_user", { target: user.user_id }).then(({ data, error }) => {
       if (error) return toast(error.message);
-      if (!data) return;
-      if (data.is_mutual) {
-        showMatchOverlay(user, data.session_id);
-      } else {
-        toast(`You liked ${user.nickname}! Head to Chats to message them.`);
-        if (document.getElementById("session-list")) loadSessions();
-      }
+      if (data) showMatchOverlay(user, data);
     });
   }
 
