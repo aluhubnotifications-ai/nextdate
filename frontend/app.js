@@ -481,8 +481,6 @@ const state = {
   pendingUnmatch: new Set(),
   onlineUsers: new Set(),
   peerLastSeen: new Map(),
-  sessionKeys: new Map(),
-  myKeyPair: null,
   currentView: null,
 };
 
@@ -732,28 +730,10 @@ async function onSignedIn(user) {
   subscribeDeckInvalidation();
   subscribePresence();
   startHeartbeat();
-  // E2E: make sure we have a keypair locally and that profiles.public_key
-  // mirrors our public JWK. New users land here without a key column
-  // value; we lazily upload one. If the DB doesn't have public_key yet,
-  // the upsert errors silently and chat falls back to plaintext.
-  ensurePublishedPublicKey().catch((e) => console.warn("[e2e] publish key:", e));
   navigate("discover");
 }
 
-async function ensurePublishedPublicKey() {
-  const me = await ensureMyKeyPair();
-  const myJwkStr = JSON.stringify(me.publicJwk);
-  if (state.profile?.public_key === myJwkStr) return;
-  const res = await supabase
-    .from("profiles")
-    .update({ public_key: myJwkStr })
-    .eq("id", state.user.id);
-  if (res.error) {
-    console.warn("[e2e] couldn't publish public_key (column missing?)", res.error.message);
-    return;
-  }
-  state.profile.public_key = myJwkStr;
-}
+
 
 // ---------- Discover freshness ----------
 // Listen for INSERT / UPDATE on public.profiles (other users joining
@@ -1090,8 +1070,6 @@ async function doLogout() {
   if (presenceChannel)       { supabase.removeChannel(presenceChannel);       presenceChannel = null; }
   state.onlineUsers.clear();
   state.peerLastSeen.clear();
-  state.sessionKeys.clear();
-  state.myKeyPair = null;
   if (startHeartbeat._timer) { clearInterval(startHeartbeat._timer); startHeartbeat._timer = null; }
   state.deck = null;
   state.deckIndex = 0;
@@ -1115,7 +1093,6 @@ async function deleteAccount() {
   progressStart();
   try {
     await api("/auth/me", { method: "DELETE" });
-    try { localStorage.removeItem(PRIV_KEY_STORAGE); } catch { /* noop */ }
     toast("Account deleted.");
     await doLogout();
   } catch (err) {
@@ -2248,24 +2225,12 @@ async function loadSessions() {
     const peerIds = data.map((s) => (s.user_a === state.user.id ? s.user_b : s.user_a));
     const { data: peers } = await supabase
       .from("profiles")
-      .select("id, nickname, avatar_url, last_seen, public_key")
+      .select("id, nickname, avatar_url, last_seen")
       .in("id", peerIds);
     peerMap = Object.fromEntries((peers || []).map((p) => [p.id, p]));
     for (const p of peers || []) {
       if (p.last_seen) state.peerLastSeen.set(p.id, p.last_seen);
     }
-    // Derive the AES key for every session up front so the sidebar can
-    // decrypt the latest-message preview without the user having to
-    // open the chat first. Without this, previews fall back to the
-    // "[encrypted — open the chat to decrypt]" placeholder.
-    await Promise.all(data.map(async (s) => {
-      const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
-      const peer = peerMap[peerId];
-      if (peer?.public_key) {
-        try { await ensureSessionKey(s.id, peer.public_key); }
-        catch (e) { console.warn("[e2e] sidebar key derive failed", e); }
-      }
-    }));
     // Pull the most recent message per session for the sidebar preview +
     // timestamp. One query, then bucket client-side by session_id.
     const sessionIds = data.map((s) => s.id);
@@ -2408,16 +2373,12 @@ async function openSession(sessionId) {
     const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
     const pRes = await supabase
       .from("profiles")
-      .select("id, nickname, avatar_url, gender, zodiac_sign, public_key, last_seen")
+      .select("id, nickname, avatar_url, gender, zodiac_sign, last_seen")
       .eq("id", peerId)
       .maybeSingle();
     if (pRes.error) return toast(pRes.error.message);
     peer = pRes.data || { id: peerId, nickname: "Unknown", avatar_url: "🦊", gender: "", zodiac_sign: "" };
     if (peer.last_seen) state.peerLastSeen.set(peer.id, peer.last_seen);
-    // Derive the E2E session key now so messages are decryptable on
-    // first render and encryptable on first send. Missing public_key
-    // (peer hasn't generated one yet) falls back to plaintext.
-    if (peer.public_key) await ensureSessionKey(s.id, peer.public_key);
   }
 
   const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
@@ -3201,10 +3162,6 @@ async function sendMessage() {
     return;
   }
 
-  // Encrypt with the per-session AES key derived in openSession from
-  // the peer's public ECDH key. If we never derived one (peer hasn't
-  // published a public_key yet), encryptBodyForSession returns the
-  // plaintext so the conversation still functions.
   const wireBody = body ? await encryptBodyForSession(sessionId, body) : body;
   const { error } = await supabase.from("messages").insert({
     session_id: sessionId,
@@ -3620,135 +3577,11 @@ function setAvatarImage(container, src, { withStatusDot = false } = {}) {
   return true;
 }
 
-// ============================================================
-// End-to-end message encryption (ECDH P-256 + AES-GCM 256).
-// ------------------------------------------------------------
-// The private key is generated in the browser, stored as a JWK in
-// localStorage, and never sent to the server. The public key is
-// uploaded to profiles.public_key so the peer can derive the same
-// shared AES key locally via ECDH. Messages are stored in the DB as
-// {"v":1,"iv":"<b64>","ct":"<b64>"} envelopes; bodies that don't parse
-// as an envelope are rendered as-is so legacy plaintext rows keep
-// working until they age out.
-//
-// Requires a one-time SQL change on Supabase:
-//   ALTER TABLE profiles ADD COLUMN IF NOT EXISTS public_key TEXT;
-// ============================================================
-const PRIV_KEY_STORAGE = "nd_e2e_priv_jwk_v1";
-const _enc = new TextEncoder();
-const _dec = new TextDecoder();
-
-function b64encode(buf) {
-  const bytes = new Uint8Array(buf);
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s);
-}
-function b64decode(s) {
-  const raw = atob(s);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr.buffer;
-}
-
-async function ensureMyKeyPair() {
-  if (state.myKeyPair) return state.myKeyPair;
-  try {
-    const stored = localStorage.getItem(PRIV_KEY_STORAGE);
-    if (stored) {
-      const { privateJwk, publicJwk } = JSON.parse(stored);
-      const privateKey = await crypto.subtle.importKey(
-        "jwk", privateJwk, { name: "ECDH", namedCurve: "P-256" },
-        true, ["deriveKey", "deriveBits"],
-      );
-      state.myKeyPair = { privateKey, publicJwk };
-      return state.myKeyPair;
-    }
-  } catch (e) { console.warn("[e2e] couldn't reload stored keypair, regenerating", e); }
-  const kp = await crypto.subtle.generateKey(
-    { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"],
-  );
-  const privateJwk = await crypto.subtle.exportKey("jwk", kp.privateKey);
-  const publicJwk  = await crypto.subtle.exportKey("jwk", kp.publicKey);
-  localStorage.setItem(PRIV_KEY_STORAGE, JSON.stringify({ privateJwk, publicJwk }));
-  state.myKeyPair = { privateKey: kp.privateKey, publicJwk };
-  return state.myKeyPair;
-}
-
-async function deriveSessionKey(theirPublicJwk) {
-  const me = await ensureMyKeyPair();
-  const theirPublic = await crypto.subtle.importKey(
-    "jwk", theirPublicJwk, { name: "ECDH", namedCurve: "P-256" }, true, [],
-  );
-  return crypto.subtle.deriveKey(
-    { name: "ECDH", public: theirPublic },
-    me.privateKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"],
-  );
-}
-
-async function ensureSessionKey(sessionId, peerPublicJwk) {
-  state.sessionKeys = state.sessionKeys || new Map();
-  if (state.sessionKeys.has(sessionId)) return state.sessionKeys.get(sessionId);
-  if (!peerPublicJwk) return null;
-  let parsed = peerPublicJwk;
-  if (typeof parsed === "string") {
-    try { parsed = JSON.parse(parsed); }
-    catch { console.warn("[e2e] peer public_key isn't a JWK string"); return null; }
-  }
-  try {
-    const key = await deriveSessionKey(parsed);
-    state.sessionKeys.set(sessionId, key);
-    return key;
-  } catch (e) {
-    console.warn("[e2e] failed to derive session key", e);
-    return null;
-  }
-}
-
-function parseEnvelope(body) {
-  if (typeof body !== "string" || !body.startsWith("{")) return null;
-  try {
-    const parsed = JSON.parse(body);
-    if (parsed && parsed.v === 1 && typeof parsed.iv === "string" && typeof parsed.ct === "string") return parsed;
-  } catch { /* not an envelope */ }
-  return null;
-}
-
-async function encryptBodyForSession(sessionId, plaintext) {
-  const key = state.sessionKeys?.get(sessionId);
-  if (!key) return plaintext; // peer hasn't published a key yet — fall back to plaintext.
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv }, key, _enc.encode(plaintext),
-  );
-  return JSON.stringify({ v: 1, iv: b64encode(iv), ct: b64encode(ct) });
-}
-
-async function decryptBodyForSession(sessionId, body) {
-  const env = parseEnvelope(body);
-  if (!env) return body; // legacy plaintext.
-  const key = state.sessionKeys?.get(sessionId);
-  if (!key) return "[encrypted — open the chat to decrypt]";
-  try {
-    const buf = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: new Uint8Array(b64decode(env.iv)) }, key, b64decode(env.ct),
-    );
-    return _dec.decode(buf);
-  } catch {
-    return "[unable to decrypt]";
-  }
-}
-
-// Decrypts m.body in place if it's an envelope. Safe to call on every
-// fetched/realtime message — non-envelope bodies pass through.
-async function decryptMessageInPlace(m) {
-  if (!m || !m.body) return m;
-  m.body = await decryptBodyForSession(m.session_id, m.body);
-  return m;
-}
+// E2E encryption removed — messages are stored as plaintext.
+// Supabase encrypts data at rest. These stubs keep all callers working.
+async function ensureSessionKey() { return null; }
+async function encryptBodyForSession(_sessionId, plaintext) { return plaintext; }
+async function decryptMessageInPlace(m) { return m; }
 
 // ============================================================
 // Last-seen heartbeat — fallback for the presence indicator so dots
