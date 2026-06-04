@@ -3182,7 +3182,6 @@ async function sendMessage() {
     body,
     created_at: new Date().toISOString(),
   });
-  if (document.getElementById("session-list")) scheduleSidebarRepaint();
 }
 
 const DEMO_REPLIES = [
