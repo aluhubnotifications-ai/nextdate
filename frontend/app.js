@@ -2248,12 +2248,24 @@ async function loadSessions() {
     const peerIds = data.map((s) => (s.user_a === state.user.id ? s.user_b : s.user_a));
     const { data: peers } = await supabase
       .from("profiles")
-      .select("id, nickname, avatar_url, last_seen")
+      .select("id, nickname, avatar_url, last_seen, public_key")
       .in("id", peerIds);
     peerMap = Object.fromEntries((peers || []).map((p) => [p.id, p]));
     for (const p of peers || []) {
       if (p.last_seen) state.peerLastSeen.set(p.id, p.last_seen);
     }
+    // Derive the AES key for every session up front so the sidebar can
+    // decrypt the latest-message preview without the user having to
+    // open the chat first. Without this, previews fall back to the
+    // "[encrypted — open the chat to decrypt]" placeholder.
+    await Promise.all(data.map(async (s) => {
+      const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
+      const peer = peerMap[peerId];
+      if (peer?.public_key) {
+        try { await ensureSessionKey(s.id, peer.public_key); }
+        catch (e) { console.warn("[e2e] sidebar key derive failed", e); }
+      }
+    }));
     // Pull the most recent message per session for the sidebar preview +
     // timestamp. One query, then bucket client-side by session_id.
     const sessionIds = data.map((s) => s.id);
@@ -3200,7 +3212,19 @@ async function sendMessage() {
     body: wireBody,
     reply_to_id: replyToId,
   });
-  if (error) toast(error.message);
+  if (error) { toast(error.message); return; }
+  // Optimistically update the sidebar preview for this session with the
+  // plaintext we just sent — the global INSERT handler skips messages
+  // we sent, so without this the sidebar would keep showing the previous
+  // preview (or the "[encrypted — open the chat to decrypt]" placeholder
+  // if the key wasn't derived in time).
+  state.lastMessageBySession.set(sessionId, {
+    session_id: sessionId,
+    sender_id: state.user.id,
+    body,
+    created_at: new Date().toISOString(),
+  });
+  if (document.getElementById("session-list")) scheduleSidebarRepaint();
 }
 
 const DEMO_REPLIES = [
