@@ -799,6 +799,7 @@ function mapDbNotif(row) {
     group: isTodayIso(row.created_at) ? "today" : "earlier",
     unread: row.unread,
     session_id: row.session_id,
+    actor_id: row.actor_id || null,
     created_at: row.created_at,
   };
 }
@@ -3548,9 +3549,16 @@ function paintNotifications() {
 function buildNotifNode(n) {
   const el = document.createElement("div");
   el.className = "notif-item" + (n.unread ? " unread" : "");
-  const actions = n.session_id
-    ? `<div class="notif-actions"><button class="btn sm">Open chat</button><button class="btn ghost sm" data-act="dismiss">Dismiss</button></div>`
-    : `<div class="notif-actions"><button class="btn ghost sm" data-act="dismiss">Dismiss</button></div>`;
+
+  let actions;
+  if (n.session_id) {
+    actions = `<div class="notif-actions"><button class="btn sm" data-act="open">Open chat</button><button class="btn ghost sm" data-act="dismiss">Dismiss</button></div>`;
+  } else if (n.kind === "like" && n.actor_id) {
+    actions = `<div class="notif-actions"><button class="btn sm" data-act="like-back">Like back</button><button class="btn ghost sm" data-act="dismiss">Dismiss</button></div>`;
+  } else {
+    actions = `<div class="notif-actions"><button class="btn ghost sm" data-act="dismiss">Dismiss</button></div>`;
+  }
+
   el.innerHTML = `
     <div class="notif-icon ${n.unread ? "" : "muted"}">${escapeHtml(n.icon || "🔔")}</div>
     <div class="notif-body">
@@ -3560,6 +3568,14 @@ function buildNotifNode(n) {
       ${actions}
     </div>
   `;
+
+  const markRead = () => {
+    if (!n.unread) return;
+    n.unread = false;
+    refreshBadges();
+    if (!DEMO_MODE) supabase.from("notifications").update({ unread: false }).eq("id", n.id).then(() => {});
+  };
+
   el.querySelector("[data-act='dismiss']")?.addEventListener("click", (e) => {
     e.stopPropagation();
     const idx = state.notifications.indexOf(n);
@@ -3571,14 +3587,38 @@ function buildNotifNode(n) {
         .then(({ error }) => { if (error) toast(error.message); });
     }
   });
-  el.onclick = async () => {
-    const wasUnread = n.unread;
-    n.unread = false;
-    refreshBadges();
-    if (!DEMO_MODE && wasUnread) {
-      supabase.from("notifications").update({ unread: false }).eq("id", n.id)
-        .then(() => {});
+
+  el.querySelector("[data-act='open']")?.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    markRead();
+    await navigate("chats");
+    await openSession(n.session_id);
+  });
+
+  el.querySelector("[data-act='like-back']")?.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    markRead();
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "Liking…";
+    const { data, error } = await supabase.rpc("like_user", { target: n.actor_id });
+    if (error) { toast(error.message); btn.disabled = false; btn.textContent = "Like back"; return; }
+    // Remove this notification — it's been acted on
+    const idx = state.notifications.indexOf(n);
+    if (idx >= 0) state.notifications.splice(idx, 1);
+    if (!DEMO_MODE) supabase.from("notifications").delete().eq("id", n.id).then(() => {});
+    if (data) {
+      // Mutual match — show the overlay. We need the peer's profile for the avatar.
+      const { data: peer } = await supabase.from("profiles").select("nickname,avatar_url").eq("id", n.actor_id).maybeSingle();
+      showMatchOverlay({ user_id: n.actor_id, nickname: peer?.nickname || "them", avatar_url: peer?.avatar_url || "🌸" }, data);
+    } else {
+      toast("Liked! Waiting for them to like you back.");
     }
+    paintNotifications();
+  });
+
+  el.onclick = async () => {
+    markRead();
     if (n.session_id) {
       await navigate("chats");
       await openSession(n.session_id);
