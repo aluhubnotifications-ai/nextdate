@@ -192,44 +192,61 @@ def get_curated_suggestions(
         .limit(1)
         .execute()
     )
-    if not pref_rows.data:
-        raise HTTPException(status_code=404, detail="Preferences unconfigured.")
+    # Brand-new users may not have preferences yet. Don't 404 — fall back
+    # to a blank prefs object so the discovery deck still populates with
+    # every other user (just unranked).
+    prefs = MatchPreferences(**pref_rows.data[0]) if pref_rows.data else None
 
-    prefs = MatchPreferences(**pref_rows.data[0])
-
-    # Lightweight matcher: filter on intent+term, then score by overlap
-    # on interests (2x) and hobbies (1x). The pgvector column and
-    # match_candidates RPC are still there in the DB for when the
-    # backend can afford a real embedding model — this path just
-    # doesn't use them, so the worker stays well under Render's
-    # free-tier memory ceiling.
+    # Always pull the whole pool of other users with preferences. Intent
+    # and term used to be hard filters, but that meant a new user picking
+    # a niche combo (e.g. "Friendships / Short-term") saw "Check back
+    # soon" until somebody else picked exactly the same combo. Now they
+    # contribute scoring bonuses instead, and everyone is a candidate.
     candidates_q = (
         db.table("match_preferences")
-        .select("user_id, interests, hobbies")
-        .eq("target_intent", prefs.target_intent)
-        .eq("term_length", prefs.term_length)
+        .select("user_id, target_intent, term_length, interests, hobbies")
         .execute()
     )
 
     rows = [r for r in (candidates_q.data or []) if r["user_id"] != user_id]
+
+    # If nobody has filled in preferences yet (or the caller hasn't), make
+    # sure we still surface every other profile so Discover is never empty.
+    profile_ids_with_prefs = {r["user_id"] for r in rows}
+    extra_profiles_q = (
+        db.table("profiles")
+        .select("id")
+        .neq("id", user_id)
+        .execute()
+    )
+    for p in extra_profiles_q.data or []:
+        if p["id"] not in profile_ids_with_prefs:
+            rows.append({"user_id": p["id"], "interests": [], "hobbies": [],
+                         "target_intent": None, "term_length": None})
+
     if not rows:
         return []
 
-    my_interests = set(prefs.interests)
-    my_hobbies = set(prefs.hobbies)
-    # Maximum overlap we could *possibly* score against this user's prefs:
-    # if a candidate shared every interest and every hobby, their raw score
-    # would equal this. We divide each candidate's raw score by it to get
-    # a percentage in [0, 100] that's stable across people with different
-    # numbers of tags.
-    my_max = 2 * len(my_interests) + len(my_hobbies)
+    my_interests = set(prefs.interests) if prefs else set()
+    my_hobbies = set(prefs.hobbies) if prefs else set()
+    my_intent = prefs.target_intent if prefs else None
+    my_term = prefs.term_length if prefs else None
+
+    # Scoring weights (raw points): interest overlap 2x, hobby overlap 1x,
+    # intent match adds a flat 4-pt bonus, term match adds 2. We compute
+    # the theoretical max for normalization so the returned percentage is
+    # stable across users with different numbers of tags filled in.
+    max_overlap = 2 * len(my_interests) + len(my_hobbies)
+    max_raw = max_overlap + 4 + 2 if max_overlap or my_intent or my_term else 1
 
     scored: list[tuple[float, str]] = []
     for r in rows:
         common_i = len(my_interests.intersection(set(r.get("interests") or [])))
         common_h = len(my_hobbies.intersection(set(r.get("hobbies") or [])))
-        raw = 2 * common_i + common_h
-        pct = (raw / my_max) * 100.0 if my_max > 0 else 0.0
+        intent_bonus = 4 if my_intent and r.get("target_intent") == my_intent else 0
+        term_bonus = 2 if my_term and r.get("term_length") == my_term else 0
+        raw = 2 * common_i + common_h + intent_bonus + term_bonus
+        pct = (raw / max_raw) * 100.0
         scored.append((round(pct, 1), r["user_id"]))
 
     scored.sort(key=lambda x: x[0], reverse=True)
