@@ -726,6 +726,8 @@ async function onSignedIn(user) {
   if (!state.profile || !state.prefs) {
     return navigate("onboarding");
   }
+  await loadNotifications();
+  subscribeNotifications();
   subscribeGlobalMessages();
   subscribeDeckInvalidation();
   subscribePresence();
@@ -983,14 +985,14 @@ function subscribeNotifications() {
 
 function onNotificationInsert(payload) {
   const n = mapDbNotif(payload.new);
-  // If a message lands in the chat that's already on screen, the
-  // per-session subscription draws the bubble — treat the notif as
-  // already-read so the badge doesn't blink unnecessarily.
+  // Mark as read immediately if the user already has this conversation open.
   if (n.kind === "message" && state.activeSession?.id === n.session_id) {
     n.unread = false;
-    supabase.from("notifications").update({ unread: false }).eq("id", n.id)
-      .then(() => {});
-  } else {
+    supabase.from("notifications").update({ unread: false }).eq("id", n.id).then(() => {});
+  }
+  // Only show a push toast for non-message events (matches, reveals, system).
+  // New messages are surfaced via the sidebar badge + unread count instead.
+  if (n.kind !== "message") {
     pushToast({
       icon: n.icon,
       title: n.title,
@@ -2432,9 +2434,26 @@ async function openSession(sessionId) {
   const sidEl = $("#peer-session-id");
   if (sidEl) sidEl.textContent = `#${sessionId.slice(0, 8)}`;
 
-  // Opening a conversation clears its unread badge in the sidebar.
+  // Opening a conversation clears its unread badge + notification count.
   clearUnread(sessionId);
+  // Mark in-memory notifications read
+  let notifTouched = false;
+  for (const n of state.notifications) {
+    if (n.unread && n.kind === "message" && n.session_id === sessionId) {
+      n.unread = false; notifTouched = true;
+    }
+  }
   refreshBadges();
+  if (notifTouched && !DEMO_MODE) {
+    supabase.from("notifications")
+      .update({ unread: false })
+      .eq("user_id", state.user.id)
+      .eq("session_id", sessionId)
+      .eq("kind", "message")
+      .eq("unread", true)
+      .then(() => {});
+  }
+  if (document.getElementById("notifications-list")) paintNotifications();
   document.querySelector(`.session-item[data-session-id="${sessionId}"]`)
     ?.classList.remove("has-unread");
 
