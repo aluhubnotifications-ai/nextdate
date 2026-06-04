@@ -9,7 +9,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 const SUPABASE_URL      = "https://wkdamyjswlixzkwehxyc.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZGFteWpzd2xpeHprd2VoeHljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzgyNTksImV4cCI6MjA5NTkxNDI1OX0.8CuPl4ZhLwZ2MPW6DUnuRNcZKQyzpw-SLdg6C8KYxcg";
 const BACKEND_URL       = "https://nextdate-5may.onrender.com";
-const EMAIL_DOMAINS     = ["alustudent.com", "aluedu.org"];
 
 // ───── DEMO MODE ─────
 // When true, the app runs entirely on hardcoded users / sessions / messages
@@ -954,9 +953,6 @@ function onNotificationInsert(payload) {
 function renderAuth(root) {
   root.append($("#tpl-auth").content.cloneNode(true));
 
-  const isAluEmail = (email) =>
-    EMAIL_DOMAINS.some((d) => email.toLowerCase().endsWith("@" + d));
-
   // Tabs: Sign in / Create account. Each has its own pane so email +
   // password autofill don't collide between the two flows and so the
   // visual context (heading, button label, copy) reads correctly.
@@ -992,7 +988,6 @@ function renderAuth(root) {
     const email = $("#email_signup").value.trim();
     const password = $("#password_signup").value;
     if (!email || !password) return toast("Enter email and password.");
-    if (!isAluEmail(email)) return toast(`Email must end in ${EMAIL_DOMAINS.map((d) => "@" + d).join(" or ")}.`);
     if (password.length < 6) return toast("Password must be at least 6 characters.");
     const btn = $("#btn-signup");
     buttonLoading(btn, true);
@@ -1024,6 +1019,29 @@ async function doLogout() {
   state.user = null;
   setNavVisible(false);
   navigate("auth");
+}
+
+async function deleteAccount() {
+  if (DEMO_MODE) { toast("Demo mode — nothing to delete."); return; }
+  const ok = window.confirm(
+    "Delete your account?\n\nThis permanently removes your profile, matches, " +
+    "and messages. This action cannot be undone."
+  );
+  if (!ok) return;
+  const btn = document.getElementById("delete-account");
+  buttonLoading(btn, true);
+  progressStart();
+  try {
+    await api("/auth/me", { method: "DELETE" });
+    try { localStorage.removeItem(PRIV_KEY_STORAGE); } catch { /* noop */ }
+    toast("Account deleted.");
+    await doLogout();
+  } catch (err) {
+    toast(`Couldn't delete account: ${err.message}`);
+  } finally {
+    buttonLoading(btn, false);
+    progressEnd();
+  }
 }
 
 // ---------- ONBOARDING ----------
@@ -3439,6 +3457,7 @@ function renderProfile(root) {
   `;
   $("#edit-profile").onclick = () => navigate("onboarding");
   $("#profile-logout").onclick = () => doLogout();
+  $("#delete-account").onclick = () => deleteAccount();
   const copy = document.createElement("div");
   copy.className = "profile-copyright";
   copy.innerHTML = `<span class="mark">&copy; 2026 NextDate</span> &middot; All rights reserved.`;

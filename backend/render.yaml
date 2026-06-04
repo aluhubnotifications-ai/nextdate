@@ -15,5 +15,3 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
-      - key: ALLOWED_EMAIL_DOMAINS
-        value: alustudent.com,aluedu.org

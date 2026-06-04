@@ -33,11 +33,6 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
 JWT_TTL_SECONDS = int(os.environ.get("JWT_TTL_SECONDS", "604800"))  # 7 days
-ALLOWED_EMAIL_DOMAINS = [
-    d.strip().lower()
-    for d in os.environ.get("ALLOWED_EMAIL_DOMAINS", "alustudent.com,aluedu.org").split(",")
-    if d.strip()
-]
 
 if not (SUPABASE_URL and SUPABASE_SERVICE_KEY and SUPABASE_JWT_SECRET):
     print("[warn] SUPABASE_URL / SUPABASE_SERVICE_KEY / SUPABASE_JWT_SECRET not all set — auth + matching will 500.")
@@ -124,11 +119,6 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def email_domain_ok(email: str) -> bool:
-    e = email.strip().lower()
-    return any(e.endswith("@" + d) for d in ALLOWED_EMAIL_DOMAINS)
-
-
 # ---------- routes ----------
 @app.get("/healthz")
 def healthz():
@@ -138,12 +128,6 @@ def healthz():
 @app.post("/auth/signup", response_model=AuthResponse)
 def signup(body: SignupBody, db: Client = Depends(require_admin)):
     email = body.email.lower()
-    if not email_domain_ok(email):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Email must end in {' or '.join('@' + d for d in ALLOWED_EMAIL_DOMAINS)}.",
-        )
-
     existing = db.table("users").select("id").eq("email", email).limit(1).execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="Email already registered.")
@@ -174,6 +158,16 @@ def me(uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
     if not rows.data:
         raise HTTPException(status_code=404, detail="User not found.")
     return rows.data[0]
+
+
+@app.delete("/auth/me")
+def delete_me(uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
+    """Hard-delete the caller's account. public.users → ON DELETE CASCADE
+    on every dependent table (profiles, match_preferences, likes,
+    chat_sessions, messages, notifications, …) so a single delete
+    here wipes the user from the entire app."""
+    db.table("users").delete().eq("id", uid).execute()
+    return {"ok": True}
 
 
 @app.get("/suggestions/{user_id}", response_model=List[SuggestionResponse])
