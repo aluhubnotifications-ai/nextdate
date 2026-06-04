@@ -478,6 +478,106 @@ textarea { min-height: 88px; resize: vertical; }
 }
 .toast .toast-text { white-space: nowrap; }
 
+/* =====================================================================
+   MATCH OVERLAY — full-screen celebration shown after a mutual like
+   ===================================================================== */
+.match-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .35s ease;
+}
+.match-overlay.match-overlay-in  { opacity: 1; pointer-events: auto; }
+.match-overlay.match-overlay-out { opacity: 0; pointer-events: none; }
+
+.match-overlay-bg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 40%, rgba(255, 84, 150, 0.55) 0%, rgba(15, 10, 30, 0.94) 70%);
+  backdrop-filter: blur(6px);
+}
+
+.match-overlay-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 40px 32px 36px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  animation: matchCardPop .45s cubic-bezier(.34,1.56,.64,1) both;
+}
+
+@keyframes matchCardPop {
+  from { transform: scale(.7) translateY(40px); opacity: 0; }
+  to   { transform: scale(1) translateY(0);     opacity: 1; }
+}
+
+.match-avatars {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.match-av {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 3px solid var(--brand);
+  font-size: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 4px rgba(255, 84, 150, 0.25);
+}
+.match-av-me  { transform: translateX(14px); z-index: 1; }
+.match-av-them { transform: translateX(-14px); z-index: 1; }
+.match-av-heart {
+  font-size: 30px;
+  z-index: 2;
+  animation: heartPulse 1s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(255,84,150,.8));
+}
+@keyframes heartPulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.25); }
+}
+
+.match-headline {
+  font-size: 30px;
+  font-weight: 900;
+  background: var(--brand-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.match-subline {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+.match-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.match-actions .btn { width: 100%; justify-content: center; }
+
 /* Push-style notification banners — top-right (top-center on mobile),
    stack downward, slide in. Used for incoming messages, matches, and
    reveal approvals so the user actually sees them arrive. */

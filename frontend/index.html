@@ -395,6 +395,26 @@
     </section>
   </template>
 
+  <!-- Match overlay — injected into <body> on mutual like -->
+  <template id="tpl-match-overlay">
+    <div class="match-overlay" id="match-overlay" role="dialog" aria-modal="true" aria-label="It's a match">
+      <div class="match-overlay-bg"></div>
+      <div class="match-overlay-card">
+        <div class="match-avatars">
+          <div class="match-av match-av-me"></div>
+          <div class="match-av-heart">💖</div>
+          <div class="match-av match-av-them"></div>
+        </div>
+        <h2 class="match-headline">It's a match!</h2>
+        <p class="match-subline"></p>
+        <div class="match-actions">
+          <button class="btn" id="match-msg-btn">Send a message</button>
+          <button class="btn ghost" id="match-keep-btn">Keep swiping</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
   <template id="tpl-matches">
     <section>
       <div class="view-header">

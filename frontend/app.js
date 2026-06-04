@@ -1659,11 +1659,8 @@ function likeCurrent(card) {
   else advance();
 }
 
-function handleMutualMatchReal(user, _sessionId) {
-  // Toast immediately for snappy feedback; the notifications-table
-  // trigger creates the persistent row and the realtime subscription
-  // adds it to state.notifications + refreshes the badge shortly after.
-  toast(`💖 It's a match with ${user.nickname}!`);
+function handleMutualMatchReal(user, sessionId) {
+  showMatchOverlay(user, sessionId);
 }
 
 function advance() {
@@ -1697,16 +1694,41 @@ function handleMutualMatch(user) {
     DEMO_SESSIONS.unshift(sess);
     DEMO_MESSAGES[sess.id] = [];
   }
-  state.notifications.unshift({
-    id: `n-${Date.now()}`,
-    icon: "💖", kind: "match",
-    title: `It's a match — ${user.nickname}`,
-    text: `You both liked each other. Say hi when you're ready.`,
-    time: "just now", group: "today", unread: true,
-    session_id: sess.id,
-  });
-  refreshBadges();
-  toast(`💖 It's a match with ${user.nickname}!`);
+  showMatchOverlay(user, sess.id);
+}
+
+function showMatchOverlay(user, sessionId) {
+  // Remove any existing overlay first
+  document.getElementById("match-overlay")?.remove();
+
+  const frag = document.getElementById("tpl-match-overlay").content.cloneNode(true);
+  const overlay = frag.querySelector(".match-overlay");
+
+  // Populate avatars
+  const meProfile = state.profile;
+  overlay.querySelector(".match-av-me").textContent = meProfile?.avatar_url || "🦊";
+  overlay.querySelector(".match-av-them").textContent = user.avatar_url || "🌸";
+
+  // Subline
+  overlay.querySelector(".match-subline").textContent =
+    `${escapeHtml(user.nickname)} liked you and wants to start a conversation.`;
+
+  // Buttons
+  overlay.querySelector("#match-msg-btn").onclick = () => {
+    overlay.classList.add("match-overlay-out");
+    setTimeout(() => overlay.remove(), 350);
+    navigate("chats").then(() => {
+      if (sessionId) openSession(sessionId);
+    });
+  };
+  overlay.querySelector("#match-keep-btn").onclick = () => {
+    overlay.classList.add("match-overlay-out");
+    setTimeout(() => overlay.remove(), 350);
+  };
+
+  document.body.appendChild(overlay);
+  // Trigger entrance animation next frame
+  requestAnimationFrame(() => overlay.classList.add("match-overlay-in"));
 }
 
 // ---------- MATCHES ----------
