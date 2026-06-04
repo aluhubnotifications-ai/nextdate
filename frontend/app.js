@@ -1562,9 +1562,14 @@ function onInfoAction(act) {
             if (i >= 0) DEMO_SESSIONS.splice(i, 1);
             delete DEMO_MESSAGES[s.id];
           } else {
-            // chat_sessions cascade-deletes its messages on the FK.
-            const { error } = await supabase.from("chat_sessions").delete().eq("id", s.id);
+            // unmatch_session deletes the chat_sessions row (cascade
+            // takes messages + notifications) AND the two likes rows
+            // for the pair, so both of you can rediscover each other
+            // in Discover instead of being permanently skip-filtered.
+            const { error } = await supabase.rpc("unmatch_session", { session: s.id });
             if (error) return toast(error.message);
+            state.deck = null;
+            state.deckIndex = 0;
           }
           closeInfoPanel();
           closeActiveChat();
