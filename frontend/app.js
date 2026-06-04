@@ -992,9 +992,19 @@ function onNotificationInsert(payload) {
     n.unread = false;
     supabase.from("notifications").update({ unread: false }).eq("id", n.id).then(() => {});
   }
-  // Only show a push toast for non-message events (matches, reveals, system).
-  // New messages are surfaced via the sidebar badge + unread count instead.
-  if (n.kind !== "message") {
+
+  if (n.kind === "match" && n.session_id && n.actor_id) {
+    // The other person liked back → show the match overlay for the first liker.
+    // The person who completed the match already sees it via the RPC response.
+    supabase.from("profiles").select("nickname,avatar_url").eq("id", n.actor_id).maybeSingle()
+      .then(({ data: peer }) => {
+        showMatchOverlay(
+          { user_id: n.actor_id, nickname: peer?.nickname || "them", avatar_url: peer?.avatar_url || "🌸" },
+          n.session_id,
+        );
+      });
+  } else if (n.kind !== "message") {
+    // Reveals, likes, system → push toast.
     pushToast({
       icon: n.icon,
       title: n.title,
@@ -1002,14 +1012,12 @@ function onNotificationInsert(payload) {
       onClick: n.session_id ? () => openSession(n.session_id) : undefined,
     });
   }
+
   state.notifications.unshift(n);
   refreshBadges();
   if (document.getElementById("notifications-list")) paintNotifications();
 
-  // New match or new message → refresh the chat sidebar so the new
-  // row / updated preview shows up without the user having to
-  // navigate away. Matches grid refresh happens on next nav.
-  if ((n.kind === "match" || n.kind === "message") && document.getElementById("session-list")) {
+  if ((n.kind === "match" || n.kind === "like" || n.kind === "message") && document.getElementById("session-list")) {
     loadSessions();
   }
 }
@@ -1656,23 +1664,29 @@ function likeCurrent(card) {
   state.liked.add(user.user_id);
 
   if (DEMO_MODE) {
-    if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
+    if (DEMO_MUTUAL_FANS.has(user.user_id)) {
+      handleMutualMatch(user);
+    } else {
+      toast(`You liked ${user.nickname}! Head to Chats to message them.`);
+    }
   } else {
-    // Persist the like and let Postgres tell us if it's a mutual match.
-    // `like_user` returns the chat_sessions id when both sides have liked,
-    // otherwise null. The card flies away immediately for snappy UX.
+    // like_user now always returns {session_id, is_mutual}.
+    // is_mutual = true  → both liked → show match overlay.
+    // is_mutual = false → one-sided → chat is open, they can message now.
     supabase.rpc("like_user", { target: user.user_id }).then(({ data, error }) => {
       if (error) return toast(error.message);
-      if (data) handleMutualMatchReal(user, data);
+      if (!data) return;
+      if (data.is_mutual) {
+        showMatchOverlay(user, data.session_id);
+      } else {
+        toast(`You liked ${user.nickname}! Head to Chats to message them.`);
+        if (document.getElementById("session-list")) loadSessions();
+      }
     });
   }
 
   if (card) flyAway(card, "right");
   else advance();
-}
-
-function handleMutualMatchReal(user, sessionId) {
-  showMatchOverlay(user, sessionId);
 }
 
 function advance() {
