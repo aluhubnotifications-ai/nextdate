@@ -200,29 +200,49 @@ const cachedUser = {
 };
 
 // ---------- Supabase client (rebuilt whenever the token changes) ----------
-// Created in init() once we have config.
+// Created in init() once we have config. We memoize by token so signing
+// in / signing out doesn't spawn extra GoTrueClient instances bound to
+// the same localStorage key (which produces a console warning and can
+// cause undefined behavior under concurrent auth events). When a
+// rebuild is genuinely needed (token changed), we tear the previous
+// client's local auth state down first.
 let supabase = null;
+let _currentSupabaseToken = undefined; // sentinel — null is a valid value
+
+async function disposeSupabase(client) {
+  if (!client) return;
+  try { await client.auth?.signOut({ scope: "local" }); } catch { /* noop */ }
+  try { client.removeAllChannels?.(); } catch { /* noop */ }
+}
 
 function buildSupabase(token) {
+  if (supabase && _currentSupabaseToken === token) return supabase;
+  const prev = supabase;
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers },
   });
-  if (token) client.realtime.setAuth(token);
-  return client;
+  _currentSupabaseToken = token;
+  if (token) supabase.realtime.setAuth(token);
+  // Fire-and-forget — disposing the previous client releases its
+  // internal subscriptions so the new one is the only active instance.
+  disposeSupabase(prev);
+  return supabase;
 }
 
 function setSession(token, user) {
   tokens.set(token);
   if (user) cachedUser.set(user);
   cleanupRealtime();
-  supabase = buildSupabase(token);
+  buildSupabase(token);
 }
 function clearSession() {
   tokens.clear();
   cleanupRealtime();
-  supabase = buildSupabase(null);
+  // No client until the next sign-in. Anything that touches supabase
+  // before then guards on truthiness already.
+  if (supabase) { disposeSupabase(supabase); supabase = null; _currentSupabaseToken = undefined; }
 }
 
 // ---------- backend API ----------
@@ -655,12 +675,14 @@ function initTheme() {
     return;
   }
 
-  supabase = buildSupabase(tokens.get());
-
-  if (!tokens.get()) {
+  const initialToken = tokens.get();
+  if (!initialToken) {
+    // Defer client construction until sign-in so we don't spawn an
+    // anonymous GoTrue instance that the login flow then has to replace.
     setNavVisible(false);
     return navigate("auth");
   }
+  buildSupabase(initialToken);
   progressStart();
   try {
     const me = await api("/auth/me");
@@ -1276,22 +1298,21 @@ async function loadDiscover() {
     suggestions = DEMO_USERS;
   } else {
     try {
-      // Hand the matching engine everything it needs to score: the
-      // requester's intent + term, plus their interest/hobby vectors.
-      // Backend should: filter candidates by intent/term compatibility,
-      // score by Jaccard(interests) + Jaccard(hobbies) (and optionally
-      // embedding similarity on the two free-text fields), and return
-      // [{ user_id, nickname, avatar_url, gender, zodiac_sign,
-      //    interests, hobbies, score }] sorted by score desc.
-      suggestions = await api(`/suggestions/${state.user.id}`, {
-        method: "POST",
-        body: {
-          intent: state.prefs?.target_intent || null,
-          term_length: state.prefs?.term_length || null,
-          interests: state.prefs?.interests || [],
-          hobbies: state.prefs?.hobbies || [],
-        },
-      });
+      // The deployed backend exposes /suggestions/{user_id} as a GET.
+      // We append the requester's matching context as query parameters
+      // so the engine *can* filter by intent/term and score against the
+      // user's interest/hobby vectors when it's updated to read them;
+      // older deployments that ignore the params still return their
+      // previous behavior, just without context-aware scoring.
+      const params = new URLSearchParams();
+      const prefs = state.prefs || {};
+      if (prefs.target_intent) params.set("intent", prefs.target_intent);
+      if (prefs.term_length)   params.set("term_length", prefs.term_length);
+      for (const tag of prefs.interests || []) params.append("interests", tag);
+      for (const tag of prefs.hobbies   || []) params.append("hobbies", tag);
+      const qs = params.toString();
+      const path = `/suggestions/${state.user.id}${qs ? `?${qs}` : ""}`;
+      suggestions = await api(path);
     } catch (err) {
       progressEnd();
       stack.innerHTML = `<div class="swipe-empty">Couldn't reach the matching engine.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
