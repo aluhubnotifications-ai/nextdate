@@ -2254,6 +2254,14 @@ async function loadSessions() {
   // RLS already filters realtime delivery).
   state.knownSessionIds = new Set(data.map((s) => s.id));
 
+  // Sort by most recent message, falling back to session created_at so
+  // conversations with no messages yet still appear in a sensible order.
+  data.sort((a, b) => {
+    const ta = state.lastMessageBySession.get(a.id)?.created_at || a.created_at || "";
+    const tb = state.lastMessageBySession.get(b.id)?.created_at || b.created_at || "";
+    return tb.localeCompare(ta);
+  });
+
   // Drop the skeleton rows before painting the real list — otherwise
   // skelSessionList's placeholders sit at the top of #session-list
   // and the user thinks the page is still loading.
