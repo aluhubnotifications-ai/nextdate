@@ -1296,6 +1296,30 @@ function existingSessionPartners() {
   );
 }
 
+// Fallback when the matching backend returns no suggestions (e.g. a brand-
+// new user has no features yet). Pulls every other profile straight from
+// Supabase so the deck is never empty just because the engine is cold.
+async function loadProfilesFallback() {
+  if (!supabase || !state.user) return [];
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, nickname, avatar_url, gender, zodiac_sign, interests, hobbies")
+    .neq("id", state.user.id);
+  if (error) {
+    console.warn("[discover] profiles fallback failed:", error.message);
+    return [];
+  }
+  return (data || []).map((p) => ({
+    user_id: p.id,
+    nickname: p.nickname,
+    avatar_url: p.avatar_url,
+    gender: p.gender,
+    zodiac_sign: p.zodiac_sign,
+    interests: p.interests || [],
+    hobbies: p.hobbies || [],
+  }));
+}
+
 async function loadDiscover() {
   const stack = $("#swipe-stack");
   skelDeck(stack);
@@ -1322,9 +1346,11 @@ async function loadDiscover() {
       const path = `/suggestions/${state.user.id}${qs ? `?${qs}` : ""}`;
       suggestions = await api(path);
     } catch (err) {
-      progressEnd();
-      stack.innerHTML = `<div class="swipe-empty">Couldn't reach the matching engine.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
-      return;
+      console.warn("[discover] /suggestions failed, falling back to profiles:", err.message);
+      suggestions = [];
+    }
+    if (!suggestions || suggestions.length === 0) {
+      suggestions = await loadProfilesFallback();
     }
   }
   progressEnd();
