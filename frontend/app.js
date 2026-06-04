@@ -141,26 +141,7 @@ const DEMO_SESSIONS = [
   },
 ];
 
-const DEMO_NOTIFICATIONS = [
-  { id: "n-1", icon: "💬", kind: "message", title: "New message from NightOwl",
-    text: "\"coffee at Java House this weekend?\"",
-    time: "2m ago", group: "today", unread: true, session_id: "s-aisha" },
-  { id: "n-2", icon: "✨", kind: "match", title: "It's a match — JollofKing",
-    text: "88% compatibility based on your vibe.",
-    time: "1h ago", group: "today", unread: true, session_id: "s-kofi" },
-  { id: "n-3", icon: "🔓", kind: "reveal", title: "JollofKing revealed their identity",
-    text: "Reveal yours to unlock theirs.",
-    time: "2h ago", group: "today", unread: true, session_id: "s-kofi" },
-  { id: "n-6", icon: "✨", kind: "match", title: "New match — OctoCoder",
-    text: "79% compatibility — you both like climate-tech.",
-    time: "5h ago", group: "today", unread: true },
-  { id: "n-5", icon: "💬", kind: "message", title: "New message from Bloom",
-    text: "\"perfect — see you there 🌱\"",
-    time: "yesterday", group: "earlier", unread: false, session_id: "s-thandi" },
-  { id: "n-4", icon: "🌱", kind: "system", title: "Welcome to NextDate",
-    text: "Be kind, be real — campus community guidelines apply.",
-    time: "3 days ago", group: "earlier", unread: false },
-];
+const DEMO_NOTIFICATIONS = [];
 
 const DEMO_MESSAGES = {
   "s-aisha": [
@@ -663,7 +644,6 @@ function initTheme() {
     state.privateIdentity = DEMO_ME.private;
     setNavVisible(true);
     subscribePresence();
-    startDemoNotificationSimulator();
     return navigate("discover");
   }
 
