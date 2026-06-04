@@ -951,7 +951,7 @@ async function onAnyMessageInsert(payload) {
   }
   // Update the cached "last message" preview for this session, then
   // repaint the sidebar so the user sees the new copy + time + badge.
-  try { await decryptMessageInPlace(m); } catch { /* leave as-is */ }
+  if (m.body) m.body = sanitizeMessageBody(m.body);
   state.lastMessageBySession.set(m.session_id, m);
   // If we don't yet know about this session (e.g. someone just opened
   // a new match), pulling sessions fresh will discover it.
@@ -3579,9 +3579,21 @@ function setAvatarImage(container, src, { withStatusDot = false } = {}) {
 
 // E2E encryption removed — messages are stored as plaintext.
 // Supabase encrypts data at rest. These stubs keep all callers working.
+// sanitizeMessageBody strips legacy encrypted envelopes so they never
+// surface as raw JSON to users.
+function sanitizeMessageBody(body) {
+  if (typeof body !== "string") return body;
+  if (body.startsWith('{"v":1,') && body.includes('"iv"') && body.includes('"ct"')) {
+    return "🔒 Older message (sent before encryption was removed)";
+  }
+  return body;
+}
 async function ensureSessionKey() { return null; }
 async function encryptBodyForSession(_sessionId, plaintext) { return plaintext; }
-async function decryptMessageInPlace(m) { return m; }
+async function decryptMessageInPlace(m) {
+  if (m && m.body) m.body = sanitizeMessageBody(m.body);
+  return m;
+}
 
 // ============================================================
 // Last-seen heartbeat — fallback for the presence indicator so dots
