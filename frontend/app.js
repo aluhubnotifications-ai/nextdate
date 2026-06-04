@@ -726,9 +726,25 @@ function renderAuth(root) {
   const isAluEmail = (email) =>
     EMAIL_DOMAINS.some((d) => email.toLowerCase().endsWith("@" + d));
 
+  // Tabs: Sign in / Create account. Each has its own pane so email +
+  // password autofill don't collide between the two flows and so the
+  // visual context (heading, button label, copy) reads correctly.
+  const showPane = (which) => {
+    $$(".auth-tab").forEach((t) => {
+      const on = t.dataset.pane === which;
+      t.classList.toggle("active", on);
+      t.setAttribute("aria-selected", String(on));
+    });
+    $$(".auth-pane").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== which));
+    const focusEl = which === "login" ? $("#email_login") : $("#email_signup");
+    setTimeout(() => focusEl?.focus(), 0);
+  };
+  $$(".auth-tab").forEach((t) => t.addEventListener("click", () => showPane(t.dataset.pane)));
+  $$("[data-go]").forEach((b) => b.addEventListener("click", () => showPane(b.dataset.go)));
+
   $("#btn-login").onclick = async () => {
-    const email = $("#email").value.trim();
-    const password = $("#password").value;
+    const email = $("#email_login").value.trim();
+    const password = $("#password_login").value;
     if (!email || !password) return toast("Enter email and password.");
     const btn = $("#btn-login");
     buttonLoading(btn, true);
@@ -742,8 +758,8 @@ function renderAuth(root) {
   };
 
   $("#btn-signup").onclick = async () => {
-    const email = $("#email").value.trim();
-    const password = $("#password").value;
+    const email = $("#email_signup").value.trim();
+    const password = $("#password_signup").value;
     if (!email || !password) return toast("Enter email and password.");
     if (!isAluEmail(email)) return toast(`Email must end in ${EMAIL_DOMAINS.map((d) => "@" + d).join(" or ")}.`);
     if (password.length < 6) return toast("Password must be at least 6 characters.");
@@ -776,6 +792,33 @@ async function doLogout() {
 // ---------- ONBOARDING ----------
 function renderOnboarding(root) {
   root.append($("#tpl-onboarding").content.cloneNode(true));
+
+  // Step navigation: only one pane is visible at a time. The Continue
+  // / Back buttons carry data-next / data-back. Step 1 also validates
+  // nickname before letting the user progress.
+  const goToStep = (step) => {
+    $$(".onb-pane").forEach((p) => p.classList.toggle("hidden", Number(p.dataset.step) !== step));
+    $$(".onb-step").forEach((s) => {
+      const n = Number(s.dataset.step);
+      s.classList.toggle("active", n === step);
+      s.classList.toggle("done", n < step);
+    });
+    const bar = root.querySelector(".onb-progress");
+    if (bar) bar.setAttribute("aria-valuenow", String(step));
+    root.scrollTo?.({ top: 0, behavior: "instant" });
+    window.scrollTo?.({ top: 0, behavior: "instant" });
+  };
+  root.querySelectorAll("[data-next]").forEach((b) => b.addEventListener("click", () => {
+    const target = Number(b.dataset.next);
+    if (target === 2) {
+      const nickname = $("#nickname").value.trim();
+      if (!nickname) return toast("Pick a nickname so people can say hi.");
+    }
+    goToStep(target);
+  }));
+  root.querySelectorAll("[data-back]").forEach((b) => b.addEventListener("click", () => {
+    goToStep(Number(b.dataset.back));
+  }));
 
   if (state.profile) {
     $("#nickname").value     = state.profile.nickname || "";

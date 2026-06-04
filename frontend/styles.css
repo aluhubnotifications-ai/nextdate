@@ -3098,3 +3098,113 @@ html[data-theme="light"] .picture-preview {
 .swipe-score-chip.mild { background: rgba(255,255,255,.18); color: #fff; }
 
 html[data-theme="light"] .swipe-score-chip.mild { background: rgba(0,0,0,.55); color: #fff; }
+
+/* ============================================================
+   Auth: tabbed Sign in / Create account
+   ============================================================ */
+.auth-card { padding: 8px 24px 28px; }
+.auth-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+  background: rgba(255,255,255,.05);
+  border-radius: 999px;
+  padding: 4px;
+  margin: 4px 0 22px;
+}
+.auth-tab {
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,.7);
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: .2px;
+  transition: background .18s ease, color .18s ease, transform .18s ease;
+}
+.auth-tab:hover { color: #fff; }
+.auth-tab.active {
+  background: linear-gradient(135deg, #FF3D6E 0%, #8B5CF6 100%);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(255,61,110,.25);
+}
+.auth-pane h1 { margin: 0 0 6px; }
+.auth-pane p.muted { margin: 0 0 18px; }
+.auth-pane .btn.full { margin-top: 6px; }
+.auth-switch { margin: 14px 0 0; font-size: 13px; text-align: center; }
+.auth-switch .link {
+  background: none; border: 0; padding: 0;
+  color: #FF8A5B; cursor: pointer; font-weight: 600;
+  text-decoration: underline;
+}
+.auth-switch .link:hover { color: #FF3D6E; }
+
+html[data-theme="light"] .auth-tabs    { background: rgba(0,0,0,.04); }
+html[data-theme="light"] .auth-tab     { color: rgba(0,0,0,.55); }
+html[data-theme="light"] .auth-tab:hover { color: #111; }
+
+/* ============================================================
+   Onboarding: step wizard with progress dots
+   ============================================================ */
+.onb-shell { max-width: 760px; margin: 0 auto; padding: 8px 0 24px; }
+.onb-progress {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  margin: 4px auto 22px;
+  padding: 14px 18px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+}
+.onb-step {
+  display: flex; align-items: center; gap: 10px;
+  color: rgba(255,255,255,.55);
+  font-size: 13px; font-weight: 600;
+  flex: 1; min-width: 0;
+}
+.onb-step + .onb-step::before {
+  content: "";
+  display: block; height: 2px;
+  background: rgba(255,255,255,.12);
+  flex: 1; margin-right: 8px;
+}
+.onb-step-dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.18);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.onb-step.active { color: #fff; }
+.onb-step.active .onb-step-dot {
+  background: linear-gradient(135deg, #FF3D6E 0%, #8B5CF6 100%);
+  border-color: rgba(255,255,255,.4);
+  box-shadow: 0 4px 14px rgba(255,61,110,.35);
+}
+.onb-step.done .onb-step-dot { background: rgba(139,92,246,.35); border-color: rgba(255,255,255,.25); color: #fff; }
+.onb-step.done { color: rgba(255,255,255,.85); }
+.onb-step-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.onb-pane { animation: onb-fade .18s ease-out; }
+@keyframes onb-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.onb-actions {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  margin-top: 18px;
+}
+.onb-actions .btn { min-width: 140px; }
+
+html[data-theme="light"] .onb-progress { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.08); }
+html[data-theme="light"] .onb-step     { color: rgba(0,0,0,.55); }
+html[data-theme="light"] .onb-step.active { color: #111; }
+html[data-theme="light"] .onb-step.done   { color: rgba(0,0,0,.85); }
+html[data-theme="light"] .onb-step-dot { background: rgba(0,0,0,.06); border-color: rgba(0,0,0,.12); }
+html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,.12); }
+
+@media (max-width: 540px) {
+  .onb-step-label { display: none; }
+  .onb-progress { padding: 12px; }
+}
