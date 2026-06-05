@@ -4060,3 +4060,64 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+/* Admin portal lives on its own document — html,body has overflow:hidden
+   for the main SPA, but the admin dashboard needs to scroll normally.
+   Scope a fixed-position flex column so the top bar stays put and the
+   shell below it scrolls under it. */
+#admin-portal-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#admin-portal-root > #admin-login {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+#admin-portal-root > #admin-dash {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#admin-portal-root > #admin-dash > .admin-portal-bar {
+  flex: 0 0 auto;
+  position: static;
+}
+#admin-portal-root > #admin-dash > .admin-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The in-app admin view (inside #view-root) also needs to scroll —
+   #view-root is fine, but the .admin-shell padding-bottom needs to
+   accommodate the bottom nav. */
+[data-section="admin"] { overflow-y: auto; }
+
+/* Admin emails pane */
+.admin-pane-intro { margin: 0 0 14px; font-size: 13.5px; line-height: 1.55; }
+.admin-email-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.admin-email-meta { flex: 1 1 auto; min-width: 0; }
+.admin-email-addr {
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-email-sub { font-size: 12px; margin-top: 2px; }

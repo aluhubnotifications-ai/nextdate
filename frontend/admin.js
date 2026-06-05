@@ -158,7 +158,6 @@ function paintUsers(filter = "") {
     return hay.includes(q);
   });
   list.innerHTML = "";
-  const me = cachedUser.get();
   for (const u of visible) {
     const priv = u.private || {};
     const prefs = u.prefs || {};
@@ -167,10 +166,6 @@ function paintUsers(filter = "") {
       ...(prefs.hobbies || []).slice(0, 3),
     ].map((t) => `<span class="admin-tag">${escapeHtml(t)}</span>`).join("");
     const adminPill = u.is_admin ? `<span class="admin-pill">ADMIN</span>` : "";
-    const isMe = me?.id === u.id;
-    const promoteBtn = isMe ? "" : (u.is_admin
-      ? `<button class="btn ghost small admin-toggle" data-id="${escapeHtml(u.id)}" data-make="0">Revoke admin</button>`
-      : `<button class="btn small admin-toggle" data-id="${escapeHtml(u.id)}" data-make="1">Make admin</button>`);
     const card = document.createElement("div");
     card.className = "admin-user-card";
     card.innerHTML = `
@@ -181,8 +176,7 @@ function paintUsers(filter = "") {
           <div class="admin-user-sub">${escapeHtml(u.email || "—")} · ${escapeHtml(u.gender || "—")} · ${escapeHtml(u.zodiac_sign || "—")}</div>
         </div>
         <div class="admin-user-actions">
-          ${promoteBtn}
-          <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Revoke admin first\"" : ""}>Delete</button>
+          <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Admin accounts can't be deleted from here — remove their email from the allowlist first.\"" : ""}>Delete</button>
         </div>
       </div>
       <div class="admin-user-body">
@@ -256,8 +250,40 @@ async function loadReports() {
   }
 }
 
+function paintEmails(rows) {
+  const list = $("#admin-emails-list");
+  $("#admin-admins-count").textContent = rows.length;
+  list.innerHTML = "";
+  const meEmail = (cachedUser.get()?.email || "").toLowerCase();
+  for (const r of rows) {
+    const isMe = r.email.toLowerCase() === meEmail;
+    const card = document.createElement("div");
+    card.className = "admin-email-row";
+    card.innerHTML = `
+      <div class="admin-email-meta">
+        <div class="admin-email-addr">${escapeHtml(r.email)} ${isMe ? '<span class="admin-pill">YOU</span>' : ""}</div>
+        <div class="admin-email-sub muted">added ${escapeHtml(fmtRelative(r.added_at))}</div>
+      </div>
+      <button class="btn danger small admin-email-remove" data-email="${escapeHtml(r.email)}" ${isMe ? "disabled title=\"You can't remove your own email\"" : ""}>Remove</button>`;
+    list.appendChild(card);
+  }
+  if (!rows.length) {
+    list.innerHTML = `<div class="admin-empty">No admin emails yet.</div>`;
+  }
+}
+
+async function loadEmails() {
+  try {
+    const rows = await api("/admin/emails");
+    paintEmails(rows);
+  } catch (err) {
+    toast(err.message);
+    $("#admin-emails-list").innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
 async function renderDashboard() {
-  await Promise.all([loadUsers(), loadReports()]);
+  await Promise.all([loadUsers(), loadReports(), loadEmails()]);
 }
 
 // ---------- wiring ----------
@@ -281,22 +307,38 @@ function wire() {
   $("#admin-user-search").addEventListener("input", (e) => paintUsers(e.target.value));
   $("#admin-report-filter").addEventListener("change", loadReports);
 
+  $("#admin-add-email").addEventListener("click", async () => {
+    const input = $("#admin-new-email");
+    const email = (input.value || "").trim().toLowerCase();
+    if (!email || !email.includes("@")) { toast("Enter a valid email."); return; }
+    const btn = $("#admin-add-email");
+    btn.disabled = true;
+    try {
+      await api("/admin/emails", { method: "POST", body: { email } });
+      input.value = "";
+      await Promise.all([loadEmails(), loadUsers()]);
+      toast(`Added ${email}.`);
+    } catch (err) { toast(err.message); }
+    finally { btn.disabled = false; }
+  });
+  $("#admin-new-email").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#admin-add-email").click();
+  });
+
+  $("#admin-emails-list").addEventListener("click", async (e) => {
+    const btn = e.target.closest(".admin-email-remove");
+    if (!btn) return;
+    const email = btn.dataset.email;
+    if (!window.confirm(`Remove ${email} from the admin allowlist? If they have an account, their admin access is revoked immediately.`)) return;
+    btn.disabled = true;
+    try {
+      await api(`/admin/emails/${encodeURIComponent(email)}`, { method: "DELETE" });
+      await Promise.all([loadEmails(), loadUsers()]);
+      toast(`Removed ${email}.`);
+    } catch (err) { toast(err.message); btn.disabled = false; }
+  });
+
   $("#admin-users-list").addEventListener("click", async (e) => {
-    const toggleBtn = e.target.closest(".admin-toggle");
-    if (toggleBtn) {
-      const id = toggleBtn.dataset.id;
-      const make = toggleBtn.dataset.make === "1";
-      toggleBtn.disabled = true;
-      try {
-        await api(`/admin/users/${encodeURIComponent(id)}/admin`, {
-          method: "PATCH", body: { is_admin: make },
-        });
-        await loadUsers();
-        toast(make ? "Promoted to admin." : "Admin revoked.");
-      } catch (err) { toast(err.message); }
-      finally { toggleBtn.disabled = false; }
-      return;
-    }
     const del = e.target.closest(".admin-delete");
     if (!del) return;
     const id = del.dataset.id;

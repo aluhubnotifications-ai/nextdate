@@ -3889,10 +3889,6 @@ async function renderAdmin(root) {
         ...(prefs.hobbies || []).slice(0, 3),
       ].map((t) => `<span class="admin-tag">${escapeHtml(t)}</span>`).join("");
       const adminPill = u.is_admin ? `<span class="admin-pill">ADMIN</span>` : "";
-      const isMe = state.user?.id === u.id;
-      const promoteBtn = isMe ? "" : (u.is_admin
-        ? `<button class="btn ghost small admin-toggle" data-id="${escapeHtml(u.id)}" data-make="0">Revoke admin</button>`
-        : `<button class="btn small admin-toggle" data-id="${escapeHtml(u.id)}" data-make="1">Make admin</button>`);
       const card = document.createElement("div");
       card.className = "admin-user-card";
       card.innerHTML = `
@@ -3903,8 +3899,7 @@ async function renderAdmin(root) {
             <div class="admin-user-sub">${escapeHtml(u.email || "—")} · ${escapeHtml(u.gender || "—")} · ${escapeHtml(u.zodiac_sign || "—")}</div>
           </div>
           <div class="admin-user-actions">
-            ${promoteBtn}
-            <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Revoke admin first\"" : ""}>Delete</button>
+            <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Admin accounts can't be deleted here\"" : ""}>Delete</button>
           </div>
         </div>
         <div class="admin-user-body">
@@ -3980,21 +3975,6 @@ async function renderAdmin(root) {
   reportFilter.addEventListener("change", loadReports);
 
   usersList.addEventListener("click", async (e) => {
-    const toggleBtn = e.target.closest(".admin-toggle");
-    if (toggleBtn) {
-      const id = toggleBtn.dataset.id;
-      const make = toggleBtn.dataset.make === "1";
-      buttonLoading(toggleBtn, true);
-      try {
-        await api(`/admin/users/${encodeURIComponent(id)}/admin`, {
-          method: "PATCH", body: { is_admin: make },
-        });
-        await loadUsers();
-        toast(make ? "Promoted to admin." : "Admin revoked.");
-      } catch (err) { toast(err.message); }
-      finally { buttonLoading(toggleBtn, false); }
-      return;
-    }
     const btn = e.target.closest(".admin-delete");
     if (!btn) return;
     const id = btn.dataset.id;

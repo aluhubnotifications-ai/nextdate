@@ -233,22 +233,54 @@ def admin_delete_user(
     return {"ok": True}
 
 
-@app.patch("/admin/users/{target_id}/admin")
-def admin_set_admin_flag(
-    target_id: str,
+@app.get("/admin/emails")
+def admin_list_emails(
+    uid: str = Depends(caller_id),
+    db: Client = Depends(require_admin),
+):
+    """The admin-email allowlist. Anyone who signs up with one of these
+    addresses is auto-promoted by the profiles trigger."""
+    require_admin_caller(uid, db)
+    rows = db.table("admin_emails").select("*").order("added_at", desc=True).execute()
+    return rows.data or []
+
+
+@app.post("/admin/emails")
+def admin_add_email(
     body: dict = None,
     uid: str = Depends(caller_id),
     db: Client = Depends(require_admin),
 ):
-    """Grant or revoke admin on another account. Self-demotion is rejected
-    here because the dashboard hides the toggle on your own row anyway —
-    the only safe way to step down is for another admin to revoke you."""
+    """Add an email to the allowlist. Backfills is_admin for any
+    existing profile that already uses this address — they don't have
+    to log out + back in to gain access."""
     require_admin_caller(uid, db)
-    if target_id == uid:
-        raise HTTPException(status_code=400, detail="You can't change your own admin flag from here.")
-    desired = bool((body or {}).get("is_admin"))
-    db.table("profiles").update({"is_admin": desired}).eq("id", target_id).execute()
-    return {"ok": True, "is_admin": desired}
+    email = ((body or {}).get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Provide a valid email.")
+    db.table("admin_emails").upsert({"email": email, "added_by": uid}).execute()
+    db.table("profiles").update({"is_admin": True}).eq("email", email).execute()
+    return {"ok": True, "email": email}
+
+
+@app.delete("/admin/emails/{email}")
+def admin_remove_email(
+    email: str,
+    uid: str = Depends(caller_id),
+    db: Client = Depends(require_admin),
+):
+    """Remove an email from the allowlist and demote any matching
+    profile in the same step. Refuses to remove the caller's own email
+    so you can't accidentally lock yourself out."""
+    require_admin_caller(uid, db)
+    email = email.strip().lower()
+    me = db.table("users").select("email").eq("id", uid).limit(1).execute()
+    my_email = (me.data[0].get("email") or "").lower() if me.data else ""
+    if email == my_email:
+        raise HTTPException(status_code=400, detail="You can't remove your own email from the allowlist.")
+    db.table("admin_emails").delete().eq("email", email).execute()
+    db.table("profiles").update({"is_admin": False}).eq("email", email).execute()
+    return {"ok": True, "email": email}
 
 
 @app.get("/admin/reports")
