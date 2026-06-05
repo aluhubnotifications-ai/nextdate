@@ -8,14 +8,17 @@ ALU Matchmaking — FastAPI backend.
 
 All row shapes live in models.py — this file only wires routes.
 """
+import math
 import os
+import re
 import time
 import uuid
+from collections import Counter
 from typing import List, Optional
 
 import bcrypt
 import jwt
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from supabase import Client, create_client
@@ -23,7 +26,6 @@ from supabase import Client, create_client
 from models import (
     AuthResponse,
     LoginBody,
-    MatchPreferences,
     Profile,
     SignupBody,
     SuggestionResponse,
@@ -170,18 +172,62 @@ def delete_me(uid: str = Depends(caller_id), db: Client = Depends(require_admin)
     return {"ok": True}
 
 
+# ---------- TF-IDF cosine matching ----------
+# We score candidates by lexical similarity over a flat "profile document"
+# built from each user's interests + hobbies + the two free-text fields
+# (leisure_time, wants_in_relationship). IDF is computed per request over
+# the live candidate pool so common words ("the", "coffee") get downweighted
+# automatically — no hardcoded stopword list, no model weights to ship.
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _doc_tokens(row: dict) -> list[str]:
+    """Bag-of-words for a single user's preferences row."""
+    if not row:
+        return []
+    parts: list[str] = []
+    parts.extend(row.get("interests") or [])
+    parts.extend(row.get("hobbies") or [])
+    if row.get("leisure_time"):
+        parts.append(row["leisure_time"])
+    if row.get("wants_in_relationship"):
+        parts.append(row["wants_in_relationship"])
+    return _TOKEN_RE.findall(" ".join(parts).lower())
+
+
+def _tfidf_cosine(a_tokens: list[str], b_tokens: list[str], idf: dict[str, float]) -> float:
+    if not a_tokens or not b_tokens:
+        return 0.0
+    a_tf = Counter(a_tokens)
+    b_tf = Counter(b_tokens)
+    a_len = float(len(a_tokens))
+    b_len = float(len(b_tokens))
+    a_vec = {t: (c / a_len) * idf.get(t, 0.0) for t, c in a_tf.items()}
+    b_vec = {t: (c / b_len) * idf.get(t, 0.0) for t, c in b_tf.items()}
+    shared = a_vec.keys() & b_vec.keys()
+    dot = sum(a_vec[t] * b_vec[t] for t in shared)
+    a_norm = math.sqrt(sum(v * v for v in a_vec.values()))
+    b_norm = math.sqrt(sum(v * v for v in b_vec.values()))
+    if a_norm == 0.0 or b_norm == 0.0:
+        return 0.0
+    return dot / (a_norm * b_norm)
+
+
 @app.get("/suggestions/{user_id}", response_model=List[SuggestionResponse])
 def get_curated_suggestions(
     user_id: str,
+    passed: List[str] = Query(default_factory=list),
     me: str = Depends(caller_id),
     db: Client = Depends(require_admin),
 ):
     if user_id != me:
         raise HTTPException(status_code=403, detail="Forbidden.")
 
-    pref_rows = (
+    pref_cols = "user_id, target_intent, term_length, interests, hobbies, leisure_time, wants_in_relationship"
+
+    my_pref_q = (
         db.table("match_preferences")
-        .select("*")
+        .select(pref_cols)
         .eq("user_id", user_id)
         .limit(1)
         .execute()
@@ -189,7 +235,7 @@ def get_curated_suggestions(
     # Brand-new users may not have preferences yet. Don't 404 — fall back
     # to a blank prefs object so the discovery deck still populates with
     # every other user (just unranked).
-    prefs = MatchPreferences(**pref_rows.data[0]) if pref_rows.data else None
+    my_pref = my_pref_q.data[0] if my_pref_q.data else None
 
     # Always pull the whole pool of other users with preferences. Intent
     # and term used to be hard filters, but that meant a new user picking
@@ -198,7 +244,7 @@ def get_curated_suggestions(
     # contribute scoring bonuses instead, and everyone is a candidate.
     candidates_q = (
         db.table("match_preferences")
-        .select("user_id, target_intent, term_length, interests, hobbies")
+        .select(pref_cols)
         .execute()
     )
 
@@ -215,36 +261,50 @@ def get_curated_suggestions(
     )
     for p in extra_profiles_q.data or []:
         if p["id"] not in profile_ids_with_prefs:
-            rows.append({"user_id": p["id"], "interests": [], "hobbies": [],
-                         "target_intent": None, "term_length": None})
+            rows.append({
+                "user_id": p["id"], "interests": [], "hobbies": [],
+                "leisure_time": None, "wants_in_relationship": None,
+                "target_intent": None, "term_length": None,
+            })
 
     if not rows:
         return []
 
-    my_interests = set(prefs.interests) if prefs else set()
-    my_hobbies = set(prefs.hobbies) if prefs else set()
-    my_intent = prefs.target_intent if prefs else None
-    my_term = prefs.term_length if prefs else None
+    # Build the per-request IDF table from every candidate doc plus mine.
+    # IDF = ln((N + 1) / (df + 1)) + 1, the standard smoothed form.
+    my_tokens = _doc_tokens(my_pref or {})
+    cand_tokens: dict[str, list[str]] = {r["user_id"]: _doc_tokens(r) for r in rows}
+    all_docs = [my_tokens] + list(cand_tokens.values())
+    df: Counter = Counter()
+    for toks in all_docs:
+        for term in set(toks):
+            df[term] += 1
+    N = len(all_docs)
+    idf = {t: math.log((N + 1) / (cnt + 1)) + 1.0 for t, cnt in df.items()}
 
-    # Scoring weights (raw points): interest overlap 2x, hobby overlap 1x,
-    # intent match adds a flat 4-pt bonus, term match adds 2. We compute
-    # the theoretical max for normalization so the returned percentage is
-    # stable across users with different numbers of tags filled in.
-    max_overlap = 2 * len(my_interests) + len(my_hobbies)
-    max_raw = max_overlap + 4 + 2 if max_overlap or my_intent or my_term else 1
+    my_intent = (my_pref or {}).get("target_intent")
+    my_term = (my_pref or {}).get("term_length")
+    passed_set = set(passed or [])
 
-    scored: list[tuple[float, str]] = []
+    # Composite: 70% lexical similarity, 20% intent match, 10% term match.
+    # Previously-passed users still get scored and ranked against each
+    # other, but they're forced to the bottom of the deck — the caller
+    # sees every fresh face first and only re-encounters past passes
+    # once they've gone through everyone new.
+    scored: list[tuple[int, float, str]] = []
     for r in rows:
-        common_i = len(my_interests.intersection(set(r.get("interests") or [])))
-        common_h = len(my_hobbies.intersection(set(r.get("hobbies") or [])))
-        intent_bonus = 4 if my_intent and r.get("target_intent") == my_intent else 0
-        term_bonus = 2 if my_term and r.get("term_length") == my_term else 0
-        raw = 2 * common_i + common_h + intent_bonus + term_bonus
-        pct = min(100.0, (raw / max(1, max_raw)) * 100.0)
-        scored.append((round(pct, 1), r["user_id"]))
+        uid = r["user_id"]
+        sim = _tfidf_cosine(my_tokens, cand_tokens[uid], idf)
+        intent_bonus = 1.0 if my_intent and r.get("target_intent") == my_intent else 0.0
+        term_bonus = 1.0 if my_term and r.get("term_length") == my_term else 0.0
+        score = 70.0 * sim + 20.0 * intent_bonus + 10.0 * term_bonus
+        is_passed = 1 if uid in passed_set else 0
+        scored.append((is_passed, round(score, 1), uid))
 
-    scored.sort(key=lambda x: x[0], reverse=True)
-    ordered = [(uid, s) for s, uid in scored]
+    # Two-tier sort: non-passed (0) above passed (1); within each tier,
+    # higher score first.
+    scored.sort(key=lambda x: (x[0], -x[1]))
+    ordered = [(uid, s) for _, s, uid in scored]
     ordered_ids = [uid for uid, _ in ordered]
 
     profiles_q = (

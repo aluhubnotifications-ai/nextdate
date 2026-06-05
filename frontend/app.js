@@ -433,6 +433,24 @@ function skelMessages(body, n = 5) {
 // the global realtime subscription on `public.messages` so the chat
 // sidebar shows a live badge when someone messages you in a conversation
 // that isn't currently open.
+// Persisted set of users the caller has passed on. Forwarded to
+// /suggestions so the backend demotes them in the ranking; never used
+// to hard-filter the deck — the user wanted previously-passed people
+// to keep showing up, just ranked under everyone else.
+const PASSED_KEY = "nd_passed_v1";
+function loadPassedFromStorage() {
+  try {
+    const raw = localStorage.getItem(PASSED_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch { return new Set(); }
+}
+function persistPassed() {
+  try { localStorage.setItem(PASSED_KEY, JSON.stringify([...state.passed])); }
+  catch { /* noop */ }
+}
+
 const UNREAD_KEY = "nd_unread_by_session_v1";
 function loadUnreadFromStorage() {
   try {
@@ -474,7 +492,7 @@ const state = {
   lastMessageBySession: new Map(),
   knownSessionIds: new Set(),
   liked: new Set(),
-  passed: new Set(),
+  passed: loadPassedFromStorage(),
   deck: null,
   deckIndex: 0,
   replyTo: null,
@@ -1098,6 +1116,8 @@ async function doLogout() {
   state.deckIndex = 0;
   state.deckStale = false;
   state.deckLoadedAt = 0;
+  state.passed.clear();
+  try { localStorage.removeItem(PASSED_KEY); } catch {}
   clearSession();
   state.user = null;
   setNavVisible(false);
@@ -1501,6 +1521,9 @@ async function loadDiscover() {
       if (prefs.term_length)   params.set("term_length", prefs.term_length);
       for (const tag of prefs.interests || []) params.append("interests", tag);
       for (const tag of prefs.hobbies   || []) params.append("hobbies", tag);
+      // Forward the persisted pass list so the backend can demote those
+      // users to the bottom of the ranking instead of skipping them.
+      for (const uid of state.passed || []) params.append("passed", uid);
       const qs = params.toString();
       const path = `/suggestions/${state.user.id}${qs ? `?${qs}` : ""}`;
       suggestions = await api(path);
@@ -1709,7 +1732,7 @@ function flyAway(card, direction, after = advance) {
 
 function passCurrent(card) {
   const user = state.deck?.[state.deckIndex];
-  if (user) state.passed.add(user.user_id);
+  if (user) { state.passed.add(user.user_id); persistPassed(); }
   if (card) flyAway(card, "left");
   else advance();
 }
