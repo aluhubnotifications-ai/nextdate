@@ -1911,6 +1911,7 @@ const EMOJI_SET = [
 async function renderChats(root) {
   root.append($("#tpl-chats").content.cloneNode(true));
   await loadSessions();
+  startSessionsPolling();
   buildEmojiPicker();
   $("#send-btn").onclick = sendMessage;
   $("#msg-input").addEventListener("keydown", (e) => {
@@ -2632,6 +2633,11 @@ function appendMessage(m) {
   const body = $("#chat-body");
   if (!body) return;
 
+  // Idempotent — we may receive the same row from the optimistic send
+  // path, the per-session realtime channel, and the polling fallback.
+  // Render only once.
+  if (m.id && body.querySelector(`[data-msg-id="${CSS.escape(m.id)}"]`)) return;
+
   // Keep the lookup cache in sync so newly-arrived realtime messages
   // are reachable from findMessage() (used by reply-quote rendering).
   if (!DEMO_MODE) {
@@ -3295,14 +3301,23 @@ async function sendVoiceMessage({ dataUrl, mime, duration, size }) {
     setTimeout(() => { hideTyping(); simulateDemoReply(sessionId); }, 1100 + Math.random() * 900);
     return;
   }
-  const { error } = await supabase.from("messages").insert({
+  const { data: inserted, error } = await supabase.from("messages").insert({
     session_id: sessionId,
     sender_id: state.user.id,
     body: "",
     attachments: [attachment],
     reply_to_id: replyToId,
+  }).select().single();
+  if (error) { toast(error.message); return; }
+  if (inserted && state.activeSession?.id === sessionId) appendMessage(inserted);
+  state.lastMessageBySession.set(sessionId, {
+    session_id: sessionId,
+    sender_id: state.user.id,
+    body: "",
+    attachments: [attachment],
+    created_at: inserted?.created_at || new Date().toISOString(),
   });
-  if (error) toast(error.message);
+  scheduleSidebarRepaint();
 }
 
 function fmtDuration(secs) {
@@ -3342,24 +3357,31 @@ async function sendMessage() {
   }
 
   const wireBody = body ? await encryptBodyForSession(sessionId, body) : body;
-  const { error } = await supabase.from("messages").insert({
+  const { data: inserted, error } = await supabase.from("messages").insert({
     session_id: sessionId,
     sender_id: state.user.id,
     body: wireBody,
     reply_to_id: replyToId,
-  });
+  }).select().single();
   if (error) { toast(error.message); return; }
-  // Optimistically update the sidebar preview for this session with the
-  // plaintext we just sent — the global INSERT handler skips messages
-  // we sent, so without this the sidebar would keep showing the previous
-  // preview (or the "[encrypted — open the chat to decrypt]" placeholder
-  // if the key wasn't derived in time).
+  // Append straight away so the sender sees their message land without
+  // waiting on the per-session realtime echo (which can be delayed or
+  // dropped under flaky network). appendMessage dedupes by msg id, so
+  // the realtime echo that arrives later won't double-render.
+  if (inserted && state.activeSession?.id === sessionId) {
+    const local = { ...inserted, body };
+    appendMessage(local);
+  }
+  // Refresh the sidebar preview + ordering for this session immediately.
+  // The global INSERT handler skips messages we sent, so without this
+  // the sidebar keeps showing the previous preview until the next reload.
   state.lastMessageBySession.set(sessionId, {
     session_id: sessionId,
     sender_id: state.user.id,
     body,
-    created_at: new Date().toISOString(),
+    created_at: inserted?.created_at || new Date().toISOString(),
   });
+  scheduleSidebarRepaint();
 }
 
 const DEMO_REPLIES = [
@@ -3426,9 +3448,60 @@ function subscribeRealtime(sessionId) {
       },
     )
     .subscribe();
+
+  startChatPolling(sessionId);
+}
+
+// Backstop for when Postgres realtime fails to deliver an INSERT — polls
+// for any messages newer than what we've cached and feeds them through
+// appendMessage (which dedupes, so a doubled realtime + poll delivery is
+// harmless). Pauses while the tab is hidden so we're not hammering the
+// API on a backgrounded conversation.
+let _chatPollTimer = null;
+function startChatPolling(sessionId) {
+  stopChatPolling();
+  _chatPollTimer = setInterval(async () => {
+    if (document.hidden) return;
+    if (!state.activeSession || state.activeSession.id !== sessionId) return;
+    const cache = state.sessionMessages?.[sessionId] || [];
+    const lastIso = cache.length ? cache[cache.length - 1].created_at : null;
+    let q = supabase.from("messages").select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+    if (lastIso) q = q.gt("created_at", lastIso);
+    else q = q.limit(50);
+    const { data, error } = await q;
+    if (error || !data?.length) return;
+    for (const m of data) {
+      await decryptMessageInPlace(m);
+      appendMessage(m);
+    }
+  }, 4000);
+}
+function stopChatPolling() {
+  if (_chatPollTimer) { clearInterval(_chatPollTimer); _chatPollTimer = null; }
+}
+
+// Periodic sidebar refresh while the chats view is open — same idea as
+// chat polling but covers the OTHER conversations (unread bumps, new
+// previews, ordering) so the sidebar stays current even when the
+// notifications realtime channel is silent.
+let _sessionsPollTimer = null;
+function startSessionsPolling() {
+  stopSessionsPolling();
+  _sessionsPollTimer = setInterval(() => {
+    if (document.hidden) return;
+    if (!document.getElementById("session-list")) return;
+    loadSessions();
+  }, 10000);
+}
+function stopSessionsPolling() {
+  if (_sessionsPollTimer) { clearInterval(_sessionsPollTimer); _sessionsPollTimer = null; }
 }
 
 function cleanupRealtime() {
+  stopChatPolling();
+  stopSessionsPolling();
   if (!supabase) { state.messagesChannel = null; state.sessionChannel = null; return; }
   if (state.messagesChannel) { supabase.removeChannel(state.messagesChannel); state.messagesChannel = null; }
   if (state.sessionChannel)  { supabase.removeChannel(state.sessionChannel);  state.sessionChannel  = null; }
