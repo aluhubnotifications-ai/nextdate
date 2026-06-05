@@ -2051,7 +2051,7 @@ textarea { min-height: 88px; resize: vertical; }
   display: flex; gap: 12px; margin: 6px 0;
   font-size: 14px; color: var(--text);
 }
-.identity-row span:first-child {
+.identity-row > span:first-child {
   color: var(--text-muted);
   width: 130px;
   font-weight: 700;
@@ -2059,6 +2059,13 @@ textarea { min-height: 88px; resize: vertical; }
   text-transform: uppercase;
   letter-spacing: 0.5px;
   align-self: center;
+}
+/* Subtext under a label keeps normal casing so "Blocked by your
+   browser — re-enable in site settings." stays readable. */
+.identity-row > span:first-child .muted {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
 }
 
 /* ============================================================
@@ -3241,7 +3248,7 @@ textarea { min-height: 88px; resize: vertical; }
   .profile-actions { padding: 12px 18px 0; }
   .profile-danger { margin: 16px 18px 0; }
   .profile-danger .btn.danger { align-self: stretch; }
-  .identity-row span:first-child { width: 96px; font-size: 11px; }
+  .identity-row > span:first-child { width: 96px; font-size: 11px; }
   .identity-row { font-size: 13.5px; }
 }
 
