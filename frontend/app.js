@@ -3957,6 +3957,15 @@ function isActiveOrRecent(peerId) {
         console.warn("[pwa] service worker registration failed:", err);
       });
     });
+    // When a new SW takes control after a deploy, do one silent reload
+    // so the freshly-deployed CSS/JS show up without the user needing to
+    // hit refresh twice. We guard with a flag so we never loop.
+    let _swReloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (_swReloading) return;
+      _swReloading = true;
+      window.location.reload();
+    });
   }
 
   const btn    = document.getElementById("mobile-install-btn");

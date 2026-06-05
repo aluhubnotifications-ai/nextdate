@@ -1,9 +1,9 @@
 // NextDate — service worker
 // Lightweight cache so the app shell loads offline and qualifies as an
-// installable PWA. Network-first for navigations (so deploys roll out
-// immediately), cache-first for the static shell.
+// installable PWA. Network-first for everything we own so deploys roll
+// out on the next refresh; the cache is only a fallback for offline.
 
-const VERSION = "nextdate-v1";
+const VERSION = "nextdate-v3";
 const SHELL = [
   "./",
   "./index.html",
@@ -82,18 +82,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Network-first for our shell assets. We always try the live response
+  // so style/JS deploys take effect on the next refresh; the cache is
+  // only consulted when the network actually fails (offline).
   event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req)
-        .then((resp) => {
-          if (resp.ok) {
-            const copy = resp.clone();
-            caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
-          }
-          return resp;
-        })
-        .catch(() => cached);
-    })
+    fetch(req)
+      .then((resp) => {
+        if (resp && resp.ok) {
+          const copy = resp.clone();
+          caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
+        }
+        return resp;
+      })
+      .catch(() => caches.match(req))
   );
 });
