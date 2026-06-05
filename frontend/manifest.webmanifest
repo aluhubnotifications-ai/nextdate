@@ -1,0 +1,21 @@
+{
+  "name": "NextDate — Find Your People",
+  "short_name": "NextDate",
+  "description": "Anonymous campus dating and friendships. Match first, reveal when you both feel ready.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#1A0F2E",
+  "theme_color": "#271A3D",
+  "categories": ["social", "lifestyle", "dating"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

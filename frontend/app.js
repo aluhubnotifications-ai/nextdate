@@ -3778,3 +3778,95 @@ function isActiveOrRecent(peerId) {
   if (!last) return false;
   return Date.now() - new Date(last).getTime() < PRESENCE_ACTIVE_MS;
 }
+
+// ─── PWA install ─────────────────────────────────────────────
+// Register the service worker so the app qualifies as installable,
+// and wire up the mobile "Install app" pill. On Android Chrome we use
+// the deferred beforeinstallprompt event; on iOS Safari (which has no
+// programmatic install API) and other browsers we open a modal with
+// per-platform "Add to Home Screen" instructions.
+(function setupInstall() {
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch((err) => {
+        console.warn("[pwa] service worker registration failed:", err);
+      });
+    });
+  }
+
+  const btn    = document.getElementById("mobile-install-btn");
+  const modal  = document.getElementById("install-modal");
+  const mClose = document.getElementById("install-modal-close");
+  const mOk    = document.getElementById("install-modal-ok");
+  if (!btn || !modal) return;
+
+  // Already installed — don't nag.
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+
+  let deferredPrompt = null;
+
+  function showBtn() { btn.classList.remove("hidden"); }
+  function hideBtn() { btn.classList.add("hidden"); }
+
+  function openModal() {
+    // Highlight the platform that matches this device.
+    const ua = navigator.userAgent || "";
+    const isIOS = /iPhone|iPad|iPod/i.test(ua) ||
+      (ua.includes("Mac") && "ontouchend" in document);
+    const isAndroid = /Android/i.test(ua);
+    const platform = isIOS ? "ios" : isAndroid ? "android" : "desktop";
+    modal.querySelectorAll(".install-howto").forEach((el) => {
+      el.style.order = el.dataset.platform === platform ? "0" : "1";
+      el.style.borderColor =
+        el.dataset.platform === platform ? "var(--border-hi)" : "";
+    });
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+  }
+  function closeModal() {
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  // Capture the native prompt so we can fire it from our button.
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (!isStandalone) showBtn();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    hideBtn();
+    try { toast?.("NextDate installed — open it from your home screen any time."); } catch {}
+  });
+
+  btn.addEventListener("click", async () => {
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+      } catch { /* user dismissed */ }
+      deferredPrompt = null;
+      hideBtn();
+      return;
+    }
+    // No native prompt available (iOS Safari, in-app browser, already
+    // dismissed) — fall back to instructions.
+    openModal();
+  });
+
+  mClose?.addEventListener("click", closeModal);
+  mOk?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+  // If beforeinstallprompt never fires (iOS, Firefox mobile, etc.), still
+  // show the button so users have a way to discover the install flow.
+  if (!isStandalone) {
+    setTimeout(() => {
+      if (!deferredPrompt && btn.classList.contains("hidden")) showBtn();
+    }, 1500);
+  }
+})();

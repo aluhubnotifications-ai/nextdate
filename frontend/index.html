@@ -4,12 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="theme-color" content="#271A3D" />
+  <meta name="description" content="Anonymous campus dating and friendships. Match first, reveal when you both feel ready." />
   <title>NextDate — Find Your People</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="NextDate" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" />
   <link rel="stylesheet" href="./styles.css" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23FF8A5B'/%3E%3Cstop offset='55%25' stop-color='%23FF3D6E'/%3E%3Cstop offset='100%25' stop-color='%238B5CF6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M32 50 C 18 40, 12 30, 16 22 C 19 16, 28 14, 32 22 C 36 14, 45 16, 48 22 C 52 30, 46 40, 32 50 Z' fill='%23FFFFFF'/%3E%3Cpath d='M28 25 L35 32 L28 39' fill='none' stroke='%23FF3D6E' stroke-width='3.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
 </head>
 <body>
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
@@ -97,6 +104,10 @@
           </div>
         </div>
         <div class="mobile-topbar-actions">
+          <button class="install-pill hidden" id="mobile-install-btn" type="button" aria-label="Install NextDate app">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            <span>Install app</span>
+          </button>
           <button class="icon-btn" id="mobile-theme-toggle" aria-label="Toggle light/dark">
             <svg class="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             <svg class="theme-icon-light hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
@@ -194,6 +205,50 @@
       <div class="confirm-actions">
         <button class="btn ghost" id="report-cancel">Cancel</button>
         <button class="btn danger" id="report-submit">Submit report</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Install instructions modal -->
+  <div class="modal-backdrop hidden" id="install-modal" aria-hidden="true">
+    <div class="modal-card install-modal-card" role="dialog" aria-modal="true" aria-label="Install NextDate">
+      <div class="modal-head">
+        <h3>Install NextDate</h3>
+        <button class="icon-btn" id="install-modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body install-modal-body">
+        <p class="install-intro">Add NextDate to your home screen so it opens like a real app — full screen, no browser bar, works even with a flaky connection.</p>
+
+        <div class="install-howto" data-platform="ios">
+          <div class="install-howto-head">📱 On iPhone / iPad (Safari)</div>
+          <ol>
+            <li>Tap the <b>Share</b> button <span class="install-glyph">⬆️</span> at the bottom of Safari.</li>
+            <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+            <li>Tap <b>Add</b> — the NextDate icon will appear on your home screen.</li>
+          </ol>
+        </div>
+
+        <div class="install-howto" data-platform="android">
+          <div class="install-howto-head">🤖 On Android (Chrome)</div>
+          <ol>
+            <li>Tap the <b>menu</b> (⋮) in the top-right of Chrome.</li>
+            <li>Tap <b>Install app</b> (or <b>Add to Home screen</b>).</li>
+            <li>Confirm — the app will install in seconds.</li>
+          </ol>
+        </div>
+
+        <div class="install-howto" data-platform="desktop">
+          <div class="install-howto-head">💻 On desktop (Chrome / Edge)</div>
+          <ol>
+            <li>Look for the <b>install icon</b> on the right of the address bar.</li>
+            <li>Click it and choose <b>Install</b>.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="confirm-actions">
+        <button class="btn" id="install-modal-ok" type="button">Got it</button>
       </div>
     </div>
   </div>

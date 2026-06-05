@@ -3410,3 +3410,77 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   .onb-step-label { display: none; }
   .onb-progress { padding: 12px; }
 }
+
+/* ============================================================
+   PWA INSTALL — mobile topbar pill + instructions modal
+   ============================================================ */
+.install-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  background: var(--brand-grad);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+  box-shadow: 0 8px 22px var(--brand-glow);
+  transition: transform .12s, box-shadow .15s, filter .15s;
+  white-space: nowrap;
+}
+.install-pill:hover { filter: brightness(1.05); }
+.install-pill:active { transform: scale(0.96); }
+.install-pill svg { width: 16px; height: 16px; display: block; }
+
+/* Once installed (running standalone), hide the install affordance. */
+@media (display-mode: standalone) {
+  .install-pill { display: none !important; }
+}
+
+.install-modal-card { width: min(480px, 100%); }
+.install-modal-body { padding: 18px 22px 8px; }
+.install-modal-body .install-intro {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.install-howto {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.install-howto-head {
+  font-weight: 700;
+  font-size: 13.5px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.install-howto ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.install-howto b { color: var(--text); font-weight: 700; }
+.install-glyph {
+  display: inline-block;
+  font-size: 13px;
+  vertical-align: -1px;
+}
+
+/* Narrow screens — shrink the pill to icon-only to keep the topbar tidy. */
+@media (max-width: 380px) {
+  .install-pill span { display: none; }
+  .install-pill { padding: 0 10px; }
+}
