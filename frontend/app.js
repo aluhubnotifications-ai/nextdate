@@ -1338,23 +1338,43 @@ function renderOnboarding(root) {
 function makeTagInput(container, initial) {
   const tags = new Set(initial);
   const input = container.querySelector("input");
+  const addBtn = container.querySelector(".tag-add");
+  // Suggestion chips live in a sibling under the same .field — find by
+  // explicit data-suggest-for so we never accidentally bind the wrong row.
+  const suggestHost = container.parentElement?.querySelector(
+    `.tag-suggestions[data-suggest-for="${container.id}"]`,
+  );
+
+  function syncSuggestions() {
+    if (!suggestHost) return;
+    suggestHost.querySelectorAll(".tag-suggest").forEach((b) => {
+      const used = tags.has(b.textContent.trim().toLowerCase());
+      b.classList.toggle("used", used);
+      b.disabled = used;
+    });
+  }
 
   function repaint() {
     container.querySelectorAll(".tag").forEach((t) => t.remove());
     for (const v of tags) {
       const tag = document.createElement("span");
       tag.className = "tag";
-      tag.innerHTML = `${v} <button aria-label="remove">×</button>`;
+      tag.innerHTML = `${escapeHtml(v)} <button aria-label="remove" type="button">×</button>`;
       tag.querySelector("button").onclick = () => { tags.delete(v); repaint(); };
       container.insertBefore(tag, input);
     }
+    syncSuggestions();
   }
-  function commit() {
-    const v = input.value.trim().toLowerCase();
+  function addTag(raw) {
+    const v = String(raw || "").trim().toLowerCase();
     if (!v) return;
     tags.add(v);
-    input.value = "";
     repaint();
+  }
+  function commit() {
+    if (!input.value.trim()) return;
+    addTag(input.value);
+    input.value = "";
   }
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commit(); }
@@ -1364,6 +1384,25 @@ function makeTagInput(container, initial) {
     }
   });
   input.addEventListener("blur", commit);
+
+  if (addBtn) {
+    // mousedown fires before the input blurs, so trapping it keeps focus
+    // on the input and prevents the blur->commit + click->commit double.
+    addBtn.addEventListener("mousedown", (e) => e.preventDefault());
+    addBtn.addEventListener("click", () => {
+      commit();
+      input.focus();
+    });
+  }
+
+  if (suggestHost) {
+    suggestHost.addEventListener("click", (e) => {
+      const b = e.target.closest(".tag-suggest");
+      if (!b || b.disabled) return;
+      addTag(b.textContent);
+    });
+  }
+
   repaint();
   return { values: () => [...tags] };
 }

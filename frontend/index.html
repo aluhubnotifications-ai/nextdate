@@ -370,11 +370,45 @@
               </select>
             </div>
           </div>
-          <div class="field"><label>Interests <span class="req">*</span> <span class="muted" style="font-weight:400;">— add at least 3, press Enter after each</span></label>
-            <div class="tag-input" id="interests-input"><input placeholder="e.g. afrobeats, climate-tech" /></div>
+          <div class="field"><label>Interests <span class="req">*</span> <span class="muted" style="font-weight:400;">— tap a suggestion, or type your own and hit Add (need at least 3)</span></label>
+            <div class="tag-input" id="interests-input">
+              <input placeholder="e.g. afrobeats" />
+              <button class="tag-add" type="button" data-add-for="interests-input" aria-label="Add interest">+ Add</button>
+            </div>
+            <div class="tag-suggestions" data-suggest-for="interests-input">
+              <button type="button" class="tag-suggest">music</button>
+              <button type="button" class="tag-suggest">sports</button>
+              <button type="button" class="tag-suggest">tech</button>
+              <button type="button" class="tag-suggest">art</button>
+              <button type="button" class="tag-suggest">travel</button>
+              <button type="button" class="tag-suggest">food</button>
+              <button type="button" class="tag-suggest">movies</button>
+              <button type="button" class="tag-suggest">fitness</button>
+              <button type="button" class="tag-suggest">gaming</button>
+              <button type="button" class="tag-suggest">books</button>
+              <button type="button" class="tag-suggest">fashion</button>
+              <button type="button" class="tag-suggest">nature</button>
+            </div>
           </div>
-          <div class="field"><label>Hobbies <span class="req">*</span> <span class="muted" style="font-weight:400;">— add at least 2, press Enter after each</span></label>
-            <div class="tag-input" id="hobbies-input"><input placeholder="e.g. salsa, chess" /></div>
+          <div class="field"><label>Hobbies <span class="req">*</span> <span class="muted" style="font-weight:400;">— tap a suggestion, or type your own and hit Add (need at least 2)</span></label>
+            <div class="tag-input" id="hobbies-input">
+              <input placeholder="e.g. salsa" />
+              <button class="tag-add" type="button" data-add-for="hobbies-input" aria-label="Add hobby">+ Add</button>
+            </div>
+            <div class="tag-suggestions" data-suggest-for="hobbies-input">
+              <button type="button" class="tag-suggest">cooking</button>
+              <button type="button" class="tag-suggest">dancing</button>
+              <button type="button" class="tag-suggest">running</button>
+              <button type="button" class="tag-suggest">reading</button>
+              <button type="button" class="tag-suggest">hiking</button>
+              <button type="button" class="tag-suggest">painting</button>
+              <button type="button" class="tag-suggest">yoga</button>
+              <button type="button" class="tag-suggest">cycling</button>
+              <button type="button" class="tag-suggest">chess</button>
+              <button type="button" class="tag-suggest">writing</button>
+              <button type="button" class="tag-suggest">singing</button>
+              <button type="button" class="tag-suggest">swimming</button>
+            </div>
           </div>
           <div class="field"><label>How I spend leisure time <span class="req">*</span></label>
             <textarea id="leisure_time" placeholder="A sentence or two..."></textarea>

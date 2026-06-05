@@ -2102,6 +2102,59 @@ textarea { min-height: 88px; resize: vertical; }
 }
 .tag button:hover { color: var(--brand-coral); }
 
+/* "+ Add" button sits inside .tag-input on the right side. */
+.tag-add {
+  background: var(--brand-grad);
+  color: #FFFFFF;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 14px;
+  height: 32px;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  align-self: center;
+  margin-left: auto;
+  box-shadow: 0 4px 12px var(--brand-glow);
+  transition: transform .12s, filter .15s;
+}
+.tag-add:hover { filter: brightness(1.06); }
+.tag-add:active { transform: scale(0.96); }
+
+/* Suggestion chips under each tag input — tap once to add. */
+.tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.tag-suggest {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s, transform .12s;
+}
+.tag-suggest::before { content: "+ "; opacity: 0.7; font-weight: 800; }
+.tag-suggest:hover {
+  background: var(--brand-soft);
+  border-color: rgba(255, 61, 110, 0.45);
+  color: var(--text);
+}
+.tag-suggest:active { transform: scale(0.96); }
+.tag-suggest.used,
+.tag-suggest:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
+}
+.tag-suggest.used::before { content: "✓ "; opacity: 1; color: var(--brand-rose); }
+
 /* ============================================================
    MISC
    ============================================================ */
