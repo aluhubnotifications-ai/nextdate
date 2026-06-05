@@ -948,23 +948,14 @@ function scheduleSidebarRepaint() {
 async function onAnyMessageInsert(payload) {
   const m = payload.new;
   if (!m || m.sender_id === state.user?.id) return;
-  // Active conversation is handled by its own per-session subscription
-  // — don't double-bump unread for messages the user is already seeing.
-  if (state.activeSession?.id !== m.session_id) {
-    bumpUnread(m.session_id);
-    refreshBadges();
-  }
-  try { window.notifyForMessage?.(m); } catch (e) { console.warn("[notif msg]", e); }
-  // Update the cached "last message" preview for this session, then
-  // repaint the sidebar so the user sees the new copy + time + badge.
+  // Unread bumping + system push happen from onNotificationInsert,
+  // which is driven by the DB trigger on public.notifications and is
+  // more reliable than the messages realtime channel. We just refresh
+  // the cached preview so the sidebar shows the new copy ASAP when
+  // realtime *does* deliver — onNotificationInsert will also do a
+  // full loadSessions() pass right after.
   if (m.body) m.body = sanitizeMessageBody(m.body);
   state.lastMessageBySession.set(m.session_id, m);
-  // If we don't yet know about this session (e.g. someone just opened
-  // a new match), pulling sessions fresh will discover it.
-  if (!state.knownSessionIds.has(m.session_id)) {
-    scheduleSidebarRepaint();
-    return;
-  }
   scheduleSidebarRepaint();
 }
 
@@ -995,6 +986,15 @@ function onNotificationInsert(payload) {
     supabase.from("notifications").update({ unread: false }).eq("id", n.id).then(() => {});
   }
 
+  // Notifications are the canonical "new message arrived" signal —
+  // bump the per-conversation unread count from here instead of
+  // relying on the global messages realtime subscription, which has
+  // proven unreliable. The DB trigger creates exactly one
+  // notifications row per message, so this won't double-count.
+  if (n.kind === "message" && n.session_id && state.activeSession?.id !== n.session_id) {
+    bumpUnread(n.session_id);
+  }
+
   // Match notification → show overlay for the first liker (who was waiting).
   // The person who completed the match already sees the overlay via the RPC.
   if (n.kind === "match" && n.session_id && n.actor_id) {
@@ -1019,16 +1019,18 @@ function onNotificationInsert(payload) {
   refreshBadges();
   if (document.getElementById("notifications-list")) paintNotifications();
 
+  // Refresh the chat sidebar so the latest-message preview, ordering,
+  // and unread badge come straight from the database — no need to
+  // wait for (or trust) the messages realtime channel.
   if ((n.kind === "match" || n.kind === "like" || n.kind === "message") && document.getElementById("session-list")) {
     loadSessions();
   }
 
-  // System-level notification on phone/desktop. We skip plain `message`
-  // here because onAnyMessageInsert already fired one for the underlying
-  // message row — sending two for the same event would feel spammy.
-  if (n.kind !== "message") {
-    try { window.notifyForGeneric?.(n); } catch (e) { console.warn("[notif gen]", e); }
-  }
+  // System-level notification on phone/desktop. Every notification kind
+  // — including 'message' — fires one here. Suppressed automatically
+  // when the user is already looking at the relevant chat
+  // (showSystemNotification checks document focus).
+  try { window.notifyForGeneric?.(n); } catch (e) { console.warn("[notif gen]", e); }
 }
 
 // ---------- AUTH ----------
@@ -4209,11 +4211,17 @@ function notifyForMessage(m) {
 
 function notifyForGeneric(n) {
   if (!n) return;
+  // For chat messages collapse repeated pings from the same room into
+  // a single notification (per-session tag) so a chatty match doesn't
+  // spam the notification shade. Other kinds keep a unique tag.
+  const tag = n.kind === "message" && n.session_id
+    ? `msg:${n.session_id}`
+    : `notif:${n.id}`;
   showSystemNotification({
     title: n.title || "NextDate",
     body: n.text || "",
     icon: "./icon.svg",
-    tag: `notif:${n.id}`,
+    tag,
     data: {
       sessionId: n.session_id || null,
       view: n.session_id ? "chats" : "notifications",
