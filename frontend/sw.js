@@ -3,7 +3,7 @@
 // installable PWA. Network-first for everything we own so deploys roll
 // out on the next refresh; the cache is only a fallback for offline.
 
-const VERSION = "nextdate-v4";
+const VERSION = "nextdate-v3";
 const SHELL = [
   "./",
   "./index.html",

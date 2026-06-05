@@ -53,9 +53,6 @@ Deploy on Render using `backend/render.yaml`. Set env vars:
 - `SUPABASE_JWT_SECRET`      (HS256 secret used to mint Supabase-compatible JWTs)
 - `ALLOWED_ORIGINS`          (your Cloudflare Pages URL, comma-separated)
 - `ALLOWED_EMAIL_DOMAINS`    (default: `alustudent.com,aluedu.org`)
-- `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_CONTACT_EMAIL`
-  (Web Push — see [Web Push setup](#4--web-push-app-closed-notifications) below)
-- `PUSH_WEBHOOK_SECRET`      (shared secret for the Supabase webhook → `/push/dispatch`)
 
 ### Auth endpoints
 - `POST /auth/signup` `{email, password}` → `{user_id, email, token, expires_in}`
@@ -91,47 +88,6 @@ For local development just serve the folder:
 cd frontend
 python3 -m http.server 5173
 ```
-
-## 4 · Web Push (app-closed notifications)
-
-When the user grants notification permission the browser hands us a
-push subscription; we store it in `public.push_subscriptions` and a
-Supabase database webhook on `notifications` INSERT calls the backend
-to fan out a VAPID-signed Web Push to every subscription. The OS then
-wakes the service worker even if the browser/PWA is fully closed.
-
-Caveats: on **iOS** Web Push only works when the user has installed
-the PWA to the home screen (Safari 16.4+). On Android Chrome /
-Firefox / desktop browsers it works as long as the browser process is
-running in the background — which is the default.
-
-### One-time setup
-1. **Generate a VAPID keypair** (Node only needs `npx`):
-   ```bash
-   npx web-push generate-vapid-keys
-   ```
-   You get a `publicKey` and `privateKey` (both URL-safe base64).
-2. **Set backend env vars** on Render:
-   - `VAPID_PUBLIC_KEY`   = the public key
-   - `VAPID_PRIVATE_KEY`  = the private key
-   - `VAPID_CONTACT_EMAIL` = an email the push services can reach you at
-   - `PUSH_WEBHOOK_SECRET` = any random string (e.g. `openssl rand -hex 32`)
-3. **Apply the migration** `20260605000001_push_subscriptions.sql`
-   (creates `public.push_subscriptions`).
-4. **Create the database webhook** in Supabase Dashboard →
-   *Database → Webhooks → Create a new hook*:
-   - Table: `notifications`
-   - Events: ☑ Insert (only)
-   - Type: HTTP request
-   - Method: `POST`
-   - URL: `https://<your-backend>.onrender.com/push/dispatch`
-   - HTTP Headers:
-     - `Content-Type: application/json`
-     - `X-Webhook-Secret: <PUSH_WEBHOOK_SECRET>` (the value from step 2)
-
-That's it. The frontend automatically subscribes the device on the
-next sign-in after notification permission is granted, and the Profile
-toggle drops the subscription when turned off.
 
 ## Auth model
 - The FastAPI backend owns email/password (bcrypt-hashed, stored in `public.users`).
