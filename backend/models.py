@@ -117,3 +117,15 @@ class SuggestionResponse(BaseModel):
     interests: List[str] = Field(default_factory=list)
     hobbies: List[str] = Field(default_factory=list)
     score: float = 0.0
+
+
+# ---------- Web Push ----------
+class PushSubscribeBody(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+    user_agent: Optional[str] = None
+
+
+class PushUnsubscribeBody(BaseModel):
+    endpoint: str

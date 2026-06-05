@@ -735,6 +735,10 @@ async function onSignedIn(user) {
   startHeartbeat();
   navigate("discover");
   try { window.maybePromptForNotifications?.(); } catch {}
+  // If the user already granted permission on a prior session, refresh
+  // the Web Push subscription so messages still arrive when the tab is
+  // fully closed. No-op if permission is "default" / "denied".
+  try { window.ensurePushSubscription?.(); } catch {}
 }
 
 
@@ -1085,6 +1089,10 @@ function renderAuth(root) {
 
 async function doLogout() {
   if (DEMO_MODE) { toast("Demo mode — no real session to sign out of."); return; }
+  // Drop the push subscription tied to this account before we lose the
+  // bearer token — otherwise the next person on this browser would
+  // start receiving pushes meant for us.
+  try { await window.dropPushSubscription?.(); } catch {}
   if (notifChannel)          { supabase.removeChannel(notifChannel);          notifChannel = null; }
   if (globalMessagesChannel) { supabase.removeChannel(globalMessagesChannel); globalMessagesChannel = null; }
   if (profilesChannel)       { supabase.removeChannel(profilesChannel);       profilesChannel = null; }
@@ -3792,6 +3800,9 @@ function wireNotifToggle() {
     if (currentlyOn) {
       localStorage.setItem("nd_notifs_off", "1");
       toast("Notifications off.");
+      // Drop the Web Push subscription so the OS stops waking us when
+      // the tab is closed. Re-toggling on will re-subscribe.
+      try { await window.dropPushSubscription?.(); } catch {}
     } else {
       const res = await window.requestNotificationPermission?.();
       if (res !== "granted") { paint(); return; }
@@ -4136,11 +4147,113 @@ async function requestNotificationPermission() {
   if (result === "granted") {
     localStorage.removeItem("nd_notifs_off");
     toast("Notifications on — we'll ping you for matches and messages.");
+    // Register this device for Web Push so notifications still arrive
+    // when the tab is fully closed. Fire-and-forget — if the backend
+    // isn't push-configured yet, the in-app subscription still works
+    // for foreground events.
+    ensurePushSubscription().catch((e) => console.warn("[push] subscribe:", e));
   } else if (result === "denied") {
     toast("No worries — you'll still see everything in-app.");
   }
   return result;
 }
+
+// ── Web Push subscription ──
+// Once notification permission is granted we ask the browser's
+// PushManager for a subscription tied to our VAPID public key and
+// hand the resulting endpoint + keys to the backend. The backend
+// stores them in public.push_subscriptions and a Supabase database
+// webhook on notifications INSERT calls /push/dispatch, which signs a
+// payload per subscription so the OS wakes the service worker —
+// even when the browser/PWA is fully closed.
+let _vapidPubCached = null;
+async function getVapidPublicKey() {
+  if (_vapidPubCached !== null) return _vapidPubCached;
+  try {
+    const res = await api("/push/vapid-public-key", { auth: false });
+    _vapidPubCached = (res?.public_key || "").trim() || "";
+  } catch (e) {
+    console.warn("[push] vapid key fetch:", e);
+    _vapidPubCached = "";
+  }
+  return _vapidPubCached;
+}
+
+function urlBase64ToUint8Array(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const norm = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(norm);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+function arrayBufferToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+async function ensurePushSubscription() {
+  if (DEMO_MODE) return;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  if (Notification.permission !== "granted") return;
+  if (!state.user || !tokens.get()) return;
+  const vapid = await getVapidPublicKey();
+  if (!vapid) return; // backend doesn't have keys yet — silently noop
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    // If the key changed (rotation) the existing sub won't decrypt our
+    // future pushes — start fresh.
+    const existing = sub.options?.applicationServerKey;
+    const wantBytes = urlBase64ToUint8Array(vapid);
+    const same = existing && new Uint8Array(existing).every((b, i) => b === wantBytes[i])
+      && new Uint8Array(existing).length === wantBytes.length;
+    if (!same) {
+      try { await sub.unsubscribe(); } catch {}
+      sub = null;
+    }
+  }
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapid),
+    });
+  }
+  const json = sub.toJSON();
+  await api("/push/subscribe", {
+    method: "POST",
+    body: {
+      endpoint: sub.endpoint,
+      p256dh: json.keys?.p256dh || arrayBufferToBase64(sub.getKey?.("p256dh") || new ArrayBuffer(0)),
+      auth:   json.keys?.auth   || arrayBufferToBase64(sub.getKey?.("auth")   || new ArrayBuffer(0)),
+      user_agent: navigator.userAgent || null,
+    },
+  });
+}
+
+async function dropPushSubscription() {
+  if (DEMO_MODE) return;
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    const endpoint = sub.endpoint;
+    try { await sub.unsubscribe(); } catch {}
+    if (state.user && tokens.get()) {
+      try { await api("/push/unsubscribe", { method: "POST", body: { endpoint } }); }
+      catch (e) { console.warn("[push] unsubscribe:", e); }
+    }
+  } catch (e) {
+    console.warn("[push] drop:", e);
+  }
+}
+
+window.ensurePushSubscription = ensurePushSubscription;
+window.dropPushSubscription = dropPushSubscription;
 
 async function showSystemNotification({ title, body = "", icon, tag, data = {} } = {}) {
   if (!nd.enabled) return;
