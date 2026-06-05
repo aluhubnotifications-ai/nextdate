@@ -3417,24 +3417,30 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
 .install-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 12px;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
   border-radius: 999px;
   border: 0;
   cursor: pointer;
   background: var(--brand-grad);
   color: #FFFFFF;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.1px;
-  box-shadow: 0 8px 22px var(--brand-glow);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.15px;
+  box-shadow: 0 10px 26px var(--brand-glow);
   transition: transform .12s, box-shadow .15s, filter .15s;
   white-space: nowrap;
+  animation: install-pulse 2.6s ease-in-out infinite;
 }
 .install-pill:hover { filter: brightness(1.05); }
-.install-pill:active { transform: scale(0.96); }
-.install-pill svg { width: 16px; height: 16px; display: block; }
+.install-pill:active { transform: scale(0.96); animation: none; }
+.install-pill svg { width: 20px; height: 20px; display: block; }
+
+@keyframes install-pulse {
+  0%, 100% { box-shadow: 0 10px 26px var(--brand-glow); transform: translateY(0); }
+  50%      { box-shadow: 0 14px 34px var(--brand-glow), 0 0 0 6px rgba(255, 61, 110, 0.18); transform: translateY(-1px); }
+}
 
 /* Once installed (running standalone), hide the install affordance. */
 @media (display-mode: standalone) {
@@ -3479,10 +3485,9 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   vertical-align: -1px;
 }
 
-/* Narrow screens — shrink the pill to icon-only to keep the topbar tidy. */
+/* Narrow screens — keep the label visible; only trim padding a hair. */
 @media (max-width: 380px) {
-  .install-pill span { display: none; }
-  .install-pill { padding: 0 10px; }
+  .install-pill { padding: 0 14px; font-size: 14px; }
 }
 
 /* ============================================================
