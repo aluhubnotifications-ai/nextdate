@@ -2108,52 +2108,127 @@ textarea { min-height: 88px; resize: vertical; }
   color: #FFFFFF;
   border: 0;
   border-radius: 999px;
-  padding: 0 14px;
-  height: 32px;
+  padding: 0 16px;
+  height: 34px;
   font-weight: 800;
   font-size: 13px;
   letter-spacing: 0.2px;
   cursor: pointer;
   align-self: center;
   margin-left: auto;
-  box-shadow: 0 4px 12px var(--brand-glow);
-  transition: transform .12s, filter .15s;
+  box-shadow: 0 6px 16px var(--brand-glow);
+  transition: transform .12s, filter .15s, box-shadow .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
-.tag-add:hover { filter: brightness(1.06); }
+.tag-add:hover { filter: brightness(1.06); box-shadow: 0 8px 22px var(--brand-glow); }
 .tag-add:active { transform: scale(0.96); }
 
-/* Suggestion chips under each tag input — tap once to add. */
+/* "Quick picks" labelled block above each suggestion row. */
+.suggest-block { margin-top: 10px; }
+.suggest-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.suggest-label .muted {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+}
+
+/* Suggestion chips — premium pill picker with selected state. */
 .tag-suggestions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
 }
 .tag-suggest {
-  background: var(--bg-elevated);
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)),
+    var(--bg-elevated);
   color: var(--text);
-  border: 1px solid var(--border-soft);
+  border: 1.5px solid var(--border-soft);
   border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12.5px;
+  padding: 8px 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background .12s, border-color .12s, color .12s, transform .12s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+  transition:
+    background .15s ease,
+    border-color .15s ease,
+    color .15s ease,
+    box-shadow .15s ease,
+    transform .12s ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.tag-suggest::before { content: "+ "; opacity: 0.7; font-weight: 800; }
+.tag-suggest::before {
+  content: "+";
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--brand-rose);
+  line-height: 1;
+}
 .tag-suggest:hover {
-  background: var(--brand-soft);
-  border-color: rgba(255, 61, 110, 0.45);
+  border-color: rgba(255, 61, 110, 0.55);
+  color: var(--text);
+  box-shadow: 0 4px 14px rgba(255, 61, 110, 0.18);
+  transform: translateY(-1px);
+}
+.tag-suggest:active { transform: translateY(0) scale(0.97); }
+.tag-suggest:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--brand-ring);
+}
+
+/* Selected state — pops with brand gradient + checkmark, stays clickable
+   so the user can tap again to remove it. */
+.tag-suggest.used {
+  background: var(--brand-grad);
+  border-color: transparent;
+  color: #FFFFFF;
+  box-shadow: 0 8px 20px var(--brand-glow);
+  padding-right: 16px;
+}
+.tag-suggest.used::before {
+  content: "✓";
+  color: #FFFFFF;
+  font-size: 13px;
+}
+.tag-suggest.used:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 10px 26px var(--brand-glow);
+}
+
+[data-theme="light"] .tag-suggest {
+  background: #FFFFFF;
+  border-color: rgba(0, 0, 0, 0.10);
   color: var(--text);
 }
-.tag-suggest:active { transform: scale(0.96); }
-.tag-suggest.used,
-.tag-suggest:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  background: transparent;
+[data-theme="light"] .tag-suggest:hover {
+  border-color: rgba(255, 61, 110, 0.55);
+  background: #FFF8FA;
 }
-.tag-suggest.used::before { content: "✓ "; opacity: 1; color: var(--brand-rose); }
+[data-theme="light"] .tag-suggest.used {
+  background: var(--brand-grad);
+  color: #FFFFFF;
+  border-color: transparent;
+}
 
 /* ============================================================
    MISC

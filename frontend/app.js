@@ -1350,7 +1350,10 @@ function makeTagInput(container, initial) {
     suggestHost.querySelectorAll(".tag-suggest").forEach((b) => {
       const used = tags.has(b.textContent.trim().toLowerCase());
       b.classList.toggle("used", used);
-      b.disabled = used;
+      b.setAttribute("aria-pressed", used ? "true" : "false");
+      // Keep clickable — used chips toggle the value back off so the
+      // suggestion row behaves like a multi-select picker.
+      b.disabled = false;
     });
   }
 
@@ -1398,8 +1401,11 @@ function makeTagInput(container, initial) {
   if (suggestHost) {
     suggestHost.addEventListener("click", (e) => {
       const b = e.target.closest(".tag-suggest");
-      if (!b || b.disabled) return;
-      addTag(b.textContent);
+      if (!b) return;
+      const v = b.textContent.trim().toLowerCase();
+      if (!v) return;
+      if (tags.has(v)) { tags.delete(v); repaint(); }
+      else addTag(v);
     });
   }
 
