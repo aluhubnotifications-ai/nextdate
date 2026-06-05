@@ -979,6 +979,45 @@ function scheduleSidebarRepaint() {
   }, 250);
 }
 
+// In-place sidebar update for a single session: updates preview/time/unread
+// and moves the row to the top, without rebuilding the whole list (which
+// causes a visible flicker on every send).
+function patchSidebarRow(sessionId) {
+  const list = document.getElementById("session-list");
+  if (!list) return;
+  const row = list.querySelector(`.session-item[data-session-id="${sessionId}"]`);
+  if (!row) { scheduleSidebarRepaint(); return; }
+
+  const last = state.lastMessageBySession?.get(sessionId);
+  if (last) {
+    const fromMe = last.sender_id === state.user?.id;
+    const previewText = (fromMe ? "You: " : "") + (last.body || "");
+    const previewEl = row.querySelector(".session-preview");
+    if (previewEl) previewEl.textContent = previewText;
+    const timeEl = row.querySelector(".session-time");
+    if (timeEl) timeEl.textContent = formatRelativeTime(last.created_at);
+  }
+
+  const unread = state.unreadBySession?.get(sessionId) || 0;
+  row.classList.toggle("has-unread", !!unread);
+  const metaRow = row.querySelector(".session-meta-row");
+  if (metaRow) {
+    let badge = metaRow.querySelector(".session-unread");
+    if (unread) {
+      if (!badge) {
+        badge = document.createElement("div");
+        badge.className = "session-unread";
+        metaRow.appendChild(badge);
+      }
+      badge.textContent = String(unread);
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+
+  if (list.firstElementChild !== row) list.prepend(row);
+}
+
 async function onAnyMessageInsert(payload) {
   const m = payload.new;
   if (!m || m.sender_id === state.user?.id) return;
@@ -990,7 +1029,7 @@ async function onAnyMessageInsert(payload) {
   // full loadSessions() pass right after.
   if (m.body) m.body = sanitizeMessageBody(m.body);
   state.lastMessageBySession.set(m.session_id, m);
-  scheduleSidebarRepaint();
+  patchSidebarRow(m.session_id);
 }
 
 let notifChannel = null;
@@ -1055,9 +1094,15 @@ function onNotificationInsert(payload) {
 
   // Refresh the chat sidebar so the latest-message preview, ordering,
   // and unread badge come straight from the database — no need to
-  // wait for (or trust) the messages realtime channel.
-  if ((n.kind === "match" || n.kind === "like" || n.kind === "message") && document.getElementById("session-list")) {
-    loadSessions();
+  // wait for (or trust) the messages realtime channel. For 'message'
+  // we patch the affected row in place to avoid flickering the whole
+  // list; match/like may need to add a brand-new row, so full reload.
+  if (document.getElementById("session-list")) {
+    if (n.kind === "message" && n.session_id) {
+      patchSidebarRow(n.session_id);
+    } else if (n.kind === "match" || n.kind === "like") {
+      loadSessions();
+    }
   }
 
   // System-level notification on phone/desktop. Every notification kind
@@ -3363,7 +3408,7 @@ async function sendVoiceMessage({ dataUrl, mime, duration, size }) {
     attachments: [attachment],
     created_at: inserted?.created_at || new Date().toISOString(),
   });
-  scheduleSidebarRepaint();
+  patchSidebarRow(sessionId);
 }
 
 function fmtDuration(secs) {
@@ -3427,7 +3472,7 @@ async function sendMessage() {
     body,
     created_at: inserted?.created_at || new Date().toISOString(),
   });
-  scheduleSidebarRepaint();
+  patchSidebarRow(sessionId);
 }
 
 const DEMO_REPLIES = [
