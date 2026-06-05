@@ -29,6 +29,42 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// ── Notifications ──
+// Clicking a system notification focuses an existing app tab (and tells
+// it which view to open) or pops one open if none exist. The `push`
+// handler is wired up too so that, once the backend learns to send
+// VAPID-signed Web Push messages, no frontend change is needed.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const sameOrigin = all.filter((c) => c.url.startsWith(self.location.origin));
+    if (sameOrigin.length) {
+      const client = sameOrigin[0];
+      try { await client.focus(); } catch {}
+      client.postMessage({ type: "nd-notif-click", data });
+      return;
+    }
+    await self.clients.openWindow(data.url || "./");
+  })());
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch { payload = { title: event.data?.text?.() || "NextDate" }; }
+  const title = payload.title || "NextDate";
+  const options = {
+    body: payload.body || "",
+    icon: payload.icon || "./icon.svg",
+    badge: payload.badge || "./icon.svg",
+    tag: payload.tag,
+    data: payload.data || {},
+    vibrate: [60, 30, 60],
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;

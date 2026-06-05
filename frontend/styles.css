@@ -3484,3 +3484,49 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   .install-pill span { display: none; }
   .install-pill { padding: 0 10px; }
 }
+
+/* ============================================================
+   NOTIFICATIONS toggle — used in the Profile view
+   ============================================================ */
+.notif-toggle-row { align-items: center; }
+.notif-toggle-row > span:first-child { display: flex; flex-direction: column; gap: 2px; }
+.nd-switch {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.nd-switch:disabled { cursor: not-allowed; opacity: 0.55; }
+.nd-switch-track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  transition: background .15s, border-color .15s;
+  display: inline-block;
+}
+.nd-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  transition: transform .18s cubic-bezier(.4,.2,.2,1), background .15s;
+}
+.nd-switch.on .nd-switch-track {
+  background: var(--brand-grad);
+  border-color: transparent;
+  box-shadow: 0 4px 14px var(--brand-glow);
+}
+.nd-switch.on .nd-switch-thumb { transform: translateX(18px); }
+.nd-switch:focus-visible .nd-switch-track {
+  outline: 2px solid var(--brand-rose);
+  outline-offset: 2px;
+}

@@ -734,6 +734,7 @@ async function onSignedIn(user) {
   subscribePresence();
   startHeartbeat();
   navigate("discover");
+  try { window.maybePromptForNotifications?.(); } catch {}
 }
 
 
@@ -953,6 +954,7 @@ async function onAnyMessageInsert(payload) {
     bumpUnread(m.session_id);
     refreshBadges();
   }
+  try { window.notifyForMessage?.(m); } catch (e) { console.warn("[notif msg]", e); }
   // Update the cached "last message" preview for this session, then
   // repaint the sidebar so the user sees the new copy + time + badge.
   if (m.body) m.body = sanitizeMessageBody(m.body);
@@ -1019,6 +1021,13 @@ function onNotificationInsert(payload) {
 
   if ((n.kind === "match" || n.kind === "like" || n.kind === "message") && document.getElementById("session-list")) {
     loadSessions();
+  }
+
+  // System-level notification on phone/desktop. We skip plain `message`
+  // here because onAnyMessageInsert already fired one for the underlying
+  // message row — sending two for the same event would feel spammy.
+  if (n.kind !== "message") {
+    try { window.notifyForGeneric?.(n); } catch (e) { console.warn("[notif gen]", e); }
   }
 }
 
@@ -2296,6 +2305,14 @@ async function loadSessions() {
     peerMap = Object.fromEntries((peers || []).map((p) => [p.id, p]));
     for (const p of peers || []) {
       if (p.last_seen) state.peerLastSeen.set(p.id, p.last_seen);
+    }
+    // Track the peer for each session so realtime-driven system
+    // notifications can show "New message from <nickname>" without
+    // having to round-trip Supabase every time a message lands.
+    state.peerBySession = state.peerBySession || new Map();
+    for (const s of data) {
+      const peerId = s.user_a === state.user.id ? s.user_b : s.user_a;
+      if (peerMap[peerId]) state.peerBySession.set(s.id, peerMap[peerId]);
     }
     // Pull the most recent message per session for the sidebar preview +
     // timestamp. One query, then bucket client-side by session_id.
@@ -3652,6 +3669,20 @@ function renderProfile(root) {
       </div>
     </div>
     <div class="profile-section">
+      <div class="profile-section-label">Notifications</div>
+      <div class="profile-rows">
+        <div class="identity-row notif-toggle-row">
+          <span>
+            Push notifications
+            <span class="muted" id="notif-toggle-sub" style="display:block; font-weight:400; font-size:12px;">—</span>
+          </span>
+          <button class="nd-switch" id="notif-toggle" type="button" role="switch" aria-checked="false">
+            <span class="nd-switch-track"><span class="nd-switch-thumb"></span></span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="profile-section">
       <div class="profile-section-label">Private <span class="profile-section-sub">— only you can see this</span></div>
       <div class="profile-rows">
         <div class="identity-row"><span>Real name</span><span>${escapeHtml(pi?.real_name || "—")}</span></div>
@@ -3661,6 +3692,7 @@ function renderProfile(root) {
       </div>
     </div>
   `;
+  wireNotifToggle();
   $("#edit-profile").onclick = () => navigate("onboarding");
   $("#profile-logout").onclick = () => doLogout();
   $("#delete-account").onclick = () => deleteAccount();
@@ -3668,6 +3700,53 @@ function renderProfile(root) {
   copy.className = "profile-copyright";
   copy.innerHTML = `<span class="mark">&copy; 2026 NextDate</span> &middot; All rights reserved.`;
   root.appendChild(copy);
+}
+
+function wireNotifToggle() {
+  const sw  = document.getElementById("notif-toggle");
+  const sub = document.getElementById("notif-toggle-sub");
+  if (!sw || !sub) return;
+  const nd = window.__nd;
+
+  function paint() {
+    if (!nd?.supported) {
+      sw.classList.remove("on");
+      sw.setAttribute("aria-checked", "false");
+      sw.disabled = true;
+      sub.textContent = "Not supported on this browser.";
+      return;
+    }
+    if (Notification.permission === "denied") {
+      sw.classList.remove("on");
+      sw.setAttribute("aria-checked", "false");
+      sub.textContent = "Blocked by your browser — re-enable in site settings.";
+      return;
+    }
+    const on = nd.enabled;
+    sw.classList.toggle("on", on);
+    sw.setAttribute("aria-checked", on ? "true" : "false");
+    sub.textContent = on
+      ? "On — you'll get pings for new matches, likes and messages."
+      : "Off — turn on to get pings on your phone or computer.";
+  }
+
+  sw.onclick = async () => {
+    if (!nd?.supported || Notification.permission === "denied") {
+      paint(); return;
+    }
+    const currentlyOn = nd.enabled;
+    if (currentlyOn) {
+      localStorage.setItem("nd_notifs_off", "1");
+      toast("Notifications off.");
+    } else {
+      const res = await window.requestNotificationPermission?.();
+      if (res !== "granted") { paint(); return; }
+      localStorage.removeItem("nd_notifs_off");
+    }
+    paint();
+  };
+
+  paint();
 }
 
 // ---------- util ----------
@@ -3870,3 +3949,145 @@ function isActiveOrRecent(peerId) {
     }, 1500);
   }
 })();
+
+// ─── System (push) notifications ─────────────────────────────
+// Drives OS-level notifications on phone and desktop. Triggered by the
+// same Supabase Realtime events that already populate the in-app
+// notification banner and badges — see onAnyMessageInsert and
+// onNotificationInsert. We only fire when the window is hidden /
+// unfocused so the user doesn't get a system popup for events they're
+// already looking at in-app.
+//
+// A registered service worker is what makes these notifications survive
+// when the tab is backgrounded (and what would let a future Web Push
+// backend deliver notifications while the tab is closed entirely).
+const nd = {
+  supported: "Notification" in window && "serviceWorker" in navigator,
+  get permission() { return this.supported ? Notification.permission : "denied"; },
+  get enabled() {
+    // The user explicitly turning it off (Profile toggle) takes
+    // priority over the browser permission grant.
+    if (localStorage.getItem("nd_notifs_off") === "1") return false;
+    return this.permission === "granted";
+  },
+};
+window.__nd = nd; // exposed for the profile toggle handler
+
+async function requestNotificationPermission() {
+  if (!nd.supported) {
+    toast("This browser doesn't support notifications.");
+    return "denied";
+  }
+  if (Notification.permission === "denied") {
+    toast("Notifications are blocked. Re-enable in your browser site settings.");
+    return "denied";
+  }
+  let result = Notification.permission;
+  if (result === "default") {
+    try { result = await Notification.requestPermission(); } catch { result = "denied"; }
+  }
+  if (result === "granted") {
+    localStorage.removeItem("nd_notifs_off");
+    toast("Notifications on — we'll ping you for matches and messages.");
+  } else if (result === "denied") {
+    toast("No worries — you'll still see everything in-app.");
+  }
+  return result;
+}
+
+async function showSystemNotification({ title, body = "", icon, tag, data = {} } = {}) {
+  if (!nd.enabled) return;
+  // Suppress when the user is actively looking at the app — the in-app
+  // banner is enough and a duplicate system popup feels spammy.
+  if (document.visibilityState === "visible" && document.hasFocus()) return;
+  const opts = {
+    body,
+    icon: icon || "./icon.svg",
+    badge: "./icon.svg",
+    tag: tag || undefined,
+    data,
+    vibrate: [60, 30, 60],
+    renotify: !!tag,
+  };
+  try {
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title || "NextDate", opts);
+      return;
+    }
+  } catch (e) { /* fall through to constructor */ }
+  try { new Notification(title || "NextDate", opts); } catch (e) {}
+}
+
+// SW posts a message here when the user taps a notification — route
+// them to the right place in the app.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (ev) => {
+    const msg = ev.data || {};
+    if (msg.type !== "nd-notif-click") return;
+    const d = msg.data || {};
+    window.focus?.();
+    try {
+      if (d.sessionId) openSession(d.sessionId);
+      else if (d.view) navigate(d.view);
+    } catch (e) { console.warn("[notif click]", e); }
+  });
+}
+
+// Bridge for the in-app message stream → system notifications.
+function notifyForMessage(m) {
+  if (!m || m.sender_id === state.user?.id) return;
+  if (state.activeSession?.id === m.session_id &&
+      document.visibilityState === "visible" && document.hasFocus()) return;
+  const peer = state.peerBySession?.get(m.session_id) || {};
+  const title = peer.nickname ? `New message from ${peer.nickname}` : "New message";
+  const preview = (typeof m.body === "string" && m.body.trim())
+    ? m.body.slice(0, 140)
+    : (m.attachments?.length ? "Sent an attachment" : "");
+  showSystemNotification({
+    title,
+    body: preview,
+    tag: `msg:${m.session_id}`,
+    data: { sessionId: m.session_id, view: "chats", url: "./" },
+  });
+}
+
+function notifyForGeneric(n) {
+  if (!n) return;
+  showSystemNotification({
+    title: n.title || "NextDate",
+    body: n.text || "",
+    icon: "./icon.svg",
+    tag: `notif:${n.id}`,
+    data: {
+      sessionId: n.session_id || null,
+      view: n.session_id ? "chats" : "notifications",
+      url: "./",
+    },
+  });
+}
+// Both bridges are read by app code via the global so they're easy to stub.
+window.notifyForMessage = notifyForMessage;
+window.notifyForGeneric = notifyForGeneric;
+
+// First-time soft prompt: a few seconds after sign-in, if permission
+// is still "default", ask via a clickable push-toast banner. We only
+// ask once per session so we never become annoying.
+let _ndAsked = false;
+function maybePromptForNotifications() {
+  if (_ndAsked || !nd.supported) return;
+  if (Notification.permission !== "default") return;
+  _ndAsked = true;
+  setTimeout(() => {
+    if (Notification.permission !== "default") return;
+    pushToast({
+      icon: "🔔",
+      title: "Get notified",
+      text: "Tap to allow notifications for new matches and messages — on phone and desktop.",
+      ms: 9000,
+      onClick: () => { requestNotificationPermission(); },
+    });
+  }, 2500);
+}
+window.maybePromptForNotifications = maybePromptForNotifications;
+window.requestNotificationPermission = requestNotificationPermission;
