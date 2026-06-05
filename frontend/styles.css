@@ -3470,30 +3470,24 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
 .install-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 18px;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 0;
   cursor: pointer;
   background: var(--brand-grad);
   color: #FFFFFF;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.15px;
-  box-shadow: 0 10px 26px var(--brand-glow);
-  transition: transform .12s, box-shadow .15s, filter .15s;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+  box-shadow: 0 4px 12px var(--brand-glow);
+  transition: transform .12s, filter .15s;
   white-space: nowrap;
-  animation: install-pulse 2.6s ease-in-out infinite;
 }
 .install-pill:hover { filter: brightness(1.05); }
-.install-pill:active { transform: scale(0.96); animation: none; }
-.install-pill svg { width: 20px; height: 20px; display: block; }
-
-@keyframes install-pulse {
-  0%, 100% { box-shadow: 0 10px 26px var(--brand-glow); transform: translateY(0); }
-  50%      { box-shadow: 0 14px 34px var(--brand-glow), 0 0 0 6px rgba(255, 61, 110, 0.18); transform: translateY(-1px); }
-}
+.install-pill:active { transform: scale(0.96); }
+.install-pill svg { width: 14px; height: 14px; display: block; }
 
 /* Once installed (running standalone), hide the install affordance. */
 @media (display-mode: standalone) {
@@ -3538,9 +3532,107 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   vertical-align: -1px;
 }
 
-/* Narrow screens — keep the label visible; only trim padding a hair. */
+/* Narrow screens — collapse to icon-only so it never crowds the topbar. */
 @media (max-width: 380px) {
-  .install-pill { padding: 0 14px; font-size: 14px; }
+  .install-pill span { display: none; }
+  .install-pill { padding: 0 10px; }
+}
+
+/* ============================================================
+   NOTIFICATIONS prompt — big top banner shown on every login/refresh
+   when system notifications aren't enabled yet.
+   ============================================================ */
+.notif-prompt {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 65;
+  width: min(640px, calc(100vw - 24px));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 138, 91, 0.18), rgba(139, 92, 246, 0.18)),
+    rgba(43, 30, 69, 0.96);
+  border: 1.5px solid rgba(255, 61, 110, 0.55);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(255, 61, 110, 0.10);
+  color: var(--text);
+  animation: notif-prompt-in .35s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes notif-prompt-in {
+  from { opacity: 0; transform: translate(-50%, -16px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.notif-prompt-icon {
+  width: 48px; height: 48px;
+  border-radius: 14px;
+  background: var(--brand-grad);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  flex-shrink: 0;
+  box-shadow: 0 8px 22px var(--brand-glow);
+}
+.notif-prompt-body { flex: 1; min-width: 0; }
+.notif-prompt-title {
+  font-weight: 800;
+  font-size: 16px;
+  margin-bottom: 3px;
+}
+.notif-prompt-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.notif-prompt-actions {
+  display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
+}
+.notif-prompt-enable {
+  background: var(--brand-grad);
+  color: #FFFFFF;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 18px;
+  height: 40px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px var(--brand-glow);
+  transition: transform .12s, filter .15s;
+  white-space: nowrap;
+}
+.notif-prompt-enable:hover { filter: brightness(1.05); }
+.notif-prompt-enable:active { transform: scale(0.97); }
+.notif-prompt-dismiss {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  width: 36px; height: 36px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s;
+}
+.notif-prompt-dismiss:hover { background: var(--bg-elevated); color: var(--text); }
+.notif-prompt-dismiss svg { width: 18px; height: 18px; }
+
+@media (max-width: 560px) {
+  .notif-prompt {
+    flex-wrap: wrap;
+    top: 8px;
+    width: calc(100vw - 16px);
+    padding: 14px;
+    gap: 10px;
+  }
+  .notif-prompt-body { flex: 1 0 calc(100% - 62px); }
+  .notif-prompt-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .notif-prompt-enable { flex: 1; }
 }
 
 /* ============================================================

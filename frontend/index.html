@@ -144,6 +144,23 @@
 
   <div id="toast" class="toast"></div>
 
+  <!-- Big "Turn on notifications" banner — appears at the top of the app
+       whenever the user is signed in and notifications aren't enabled.
+       Re-appears on every login / refresh until they enable or dismiss. -->
+  <div id="notif-prompt" class="notif-prompt hidden" role="region" aria-label="Enable notifications">
+    <div class="notif-prompt-icon" aria-hidden="true">🔔</div>
+    <div class="notif-prompt-body">
+      <div class="notif-prompt-title">Turn on notifications</div>
+      <div class="notif-prompt-text">Get pinged on your phone and computer the moment you get a new match, like or message — even if NextDate isn't open.</div>
+    </div>
+    <div class="notif-prompt-actions">
+      <button class="btn notif-prompt-enable" id="notif-prompt-enable" type="button">Turn on</button>
+      <button class="notif-prompt-dismiss" id="notif-prompt-dismiss" type="button" aria-label="Not now">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+
   <!-- Emoji modal -->
   <div class="modal-backdrop hidden" id="emoji-modal" aria-hidden="true">
     <div class="modal-card emoji-modal-card" role="dialog" aria-modal="true" aria-label="Pick an emoji">

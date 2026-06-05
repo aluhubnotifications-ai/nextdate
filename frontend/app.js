@@ -4109,24 +4109,36 @@ function notifyForGeneric(n) {
 window.notifyForMessage = notifyForMessage;
 window.notifyForGeneric = notifyForGeneric;
 
-// First-time soft prompt: a few seconds after sign-in, if permission
-// is still "default", ask via a clickable push-toast banner. We only
-// ask once per session so we never become annoying.
-let _ndAsked = false;
+// Big "Turn on notifications" banner at the top of the app. Re-shown
+// on every login / refresh whenever notifications aren't enabled, so
+// users who skipped it on first visit are reminded each session.
+// Dismissing it hides the banner for the current page load only — the
+// next refresh brings it back.
+let _ndDismissed = false;
 function maybePromptForNotifications() {
-  if (_ndAsked || !nd.supported) return;
-  if (Notification.permission !== "default") return;
-  _ndAsked = true;
-  setTimeout(() => {
-    if (Notification.permission !== "default") return;
-    pushToast({
-      icon: "🔔",
-      title: "Get notified",
-      text: "Tap to allow notifications for new matches and messages — on phone and desktop.",
-      ms: 9000,
-      onClick: () => { requestNotificationPermission(); },
-    });
-  }, 2500);
+  const banner  = document.getElementById("notif-prompt");
+  const enable  = document.getElementById("notif-prompt-enable");
+  const dismiss = document.getElementById("notif-prompt-dismiss");
+  if (!banner) return;
+  if (!nd.supported) return;
+  // Already enabled — nothing to do.
+  if (nd.enabled) { banner.classList.add("hidden"); return; }
+  // Browser hard-blocked us — no programmatic way to re-prompt, so
+  // don't shove a useless banner in the user's face.
+  if (Notification.permission === "denied") { banner.classList.add("hidden"); return; }
+  if (_ndDismissed) return;
+
+  function hide() { banner.classList.add("hidden"); }
+  function show() { banner.classList.remove("hidden"); }
+
+  enable.onclick = async () => {
+    const res = await requestNotificationPermission();
+    if (res === "granted") hide();
+  };
+  dismiss.onclick = () => { _ndDismissed = true; hide(); };
+
+  // Tiny delay so the banner doesn't fight with the initial paint.
+  setTimeout(show, 400);
 }
 window.maybePromptForNotifications = maybePromptForNotifications;
 window.requestNotificationPermission = requestNotificationPermission;
