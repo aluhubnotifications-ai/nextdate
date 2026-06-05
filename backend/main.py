@@ -233,6 +233,24 @@ def admin_delete_user(
     return {"ok": True}
 
 
+@app.patch("/admin/users/{target_id}/admin")
+def admin_set_admin_flag(
+    target_id: str,
+    body: dict = None,
+    uid: str = Depends(caller_id),
+    db: Client = Depends(require_admin),
+):
+    """Grant or revoke admin on another account. Self-demotion is rejected
+    here because the dashboard hides the toggle on your own row anyway —
+    the only safe way to step down is for another admin to revoke you."""
+    require_admin_caller(uid, db)
+    if target_id == uid:
+        raise HTTPException(status_code=400, detail="You can't change your own admin flag from here.")
+    desired = bool((body or {}).get("is_admin"))
+    db.table("profiles").update({"is_admin": desired}).eq("id", target_id).execute()
+    return {"ok": True, "is_admin": desired}
+
+
 @app.get("/admin/reports")
 def admin_list_reports(
     status: Optional[str] = None,

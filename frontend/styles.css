@@ -4006,3 +4006,57 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   color: var(--text-dim);
 }
 .admin-report-actions { display: flex; gap: 8px; }
+
+/* ===== Standalone admin portal ===== */
+.admin-portal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-soft);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.admin-portal-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+.admin-portal-icon { font-size: 18px; }
+.admin-portal-as {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.admin-portal-actions { display: flex; gap: 8px; align-items: center; }
+
+.admin-login-card { max-width: 420px; }
+.admin-login-head {
+  text-align: center;
+  margin-bottom: 18px;
+}
+.admin-login-shield {
+  width: 56px; height: 56px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  background: var(--brand-grad, linear-gradient(135deg,#ff3d6e,#ff8a3d));
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+}
+.admin-login-shield svg { width: 28px; height: 28px; }
+.admin-login-error {
+  margin: 12px 0 0;
+  color: #ff5d8a;
+  font-size: 13px;
+  text-align: center;
+}
+
+.admin-user-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

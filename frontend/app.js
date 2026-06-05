@@ -479,6 +479,12 @@ function clearUnread(sessionId) {
   }
 }
 
+// Polling fallbacks for chat + sidebar — declared up here so
+// cleanupRealtime(), which can run during the init IIFE below, reads
+// them without tripping the let-binding TDZ.
+let _chatPollTimer = null;
+let _sessionsPollTimer = null;
+
 const state = {
   user: null,
   profile: null,
@@ -3497,7 +3503,6 @@ function subscribeRealtime(sessionId) {
 // appendMessage (which dedupes, so a doubled realtime + poll delivery is
 // harmless). Pauses while the tab is hidden so we're not hammering the
 // API on a backgrounded conversation.
-let _chatPollTimer = null;
 function startChatPolling(sessionId) {
   stopChatPolling();
   _chatPollTimer = setInterval(async () => {
@@ -3526,7 +3531,6 @@ function stopChatPolling() {
 // chat polling but covers the OTHER conversations (unread bumps, new
 // previews, ordering) so the sidebar stays current even when the
 // notifications realtime channel is silent.
-let _sessionsPollTimer = null;
 function startSessionsPolling() {
   stopSessionsPolling();
   _sessionsPollTimer = setInterval(() => {
@@ -3885,6 +3889,10 @@ async function renderAdmin(root) {
         ...(prefs.hobbies || []).slice(0, 3),
       ].map((t) => `<span class="admin-tag">${escapeHtml(t)}</span>`).join("");
       const adminPill = u.is_admin ? `<span class="admin-pill">ADMIN</span>` : "";
+      const isMe = state.user?.id === u.id;
+      const promoteBtn = isMe ? "" : (u.is_admin
+        ? `<button class="btn ghost small admin-toggle" data-id="${escapeHtml(u.id)}" data-make="0">Revoke admin</button>`
+        : `<button class="btn small admin-toggle" data-id="${escapeHtml(u.id)}" data-make="1">Make admin</button>`);
       const card = document.createElement("div");
       card.className = "admin-user-card";
       card.innerHTML = `
@@ -3894,7 +3902,10 @@ async function renderAdmin(root) {
             <div class="admin-user-name">${escapeHtml(u.nickname || "—")} ${adminPill}</div>
             <div class="admin-user-sub">${escapeHtml(u.email || "—")} · ${escapeHtml(u.gender || "—")} · ${escapeHtml(u.zodiac_sign || "—")}</div>
           </div>
-          <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Can't delete another admin\"" : ""}>Delete</button>
+          <div class="admin-user-actions">
+            ${promoteBtn}
+            <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Revoke admin first\"" : ""}>Delete</button>
+          </div>
         </div>
         <div class="admin-user-body">
           <div class="admin-row"><span class="admin-label">Real name</span><span>${escapeHtml(priv.real_name || "—")}</span></div>
@@ -3969,6 +3980,21 @@ async function renderAdmin(root) {
   reportFilter.addEventListener("change", loadReports);
 
   usersList.addEventListener("click", async (e) => {
+    const toggleBtn = e.target.closest(".admin-toggle");
+    if (toggleBtn) {
+      const id = toggleBtn.dataset.id;
+      const make = toggleBtn.dataset.make === "1";
+      buttonLoading(toggleBtn, true);
+      try {
+        await api(`/admin/users/${encodeURIComponent(id)}/admin`, {
+          method: "PATCH", body: { is_admin: make },
+        });
+        await loadUsers();
+        toast(make ? "Promoted to admin." : "Admin revoked.");
+      } catch (err) { toast(err.message); }
+      finally { buttonLoading(toggleBtn, false); }
+      return;
+    }
     const btn = e.target.closest(".admin-delete");
     if (!btn) return;
     const id = btn.dataset.id;

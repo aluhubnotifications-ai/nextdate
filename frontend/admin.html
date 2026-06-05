@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>NextDate — Admin portal</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+</head>
+<body>
+  <div id="admin-portal-root">
+    <!-- Login screen -->
+    <section id="admin-login" class="center-wrap">
+      <div class="card auth-card admin-login-card">
+        <div class="admin-login-head">
+          <div class="admin-login-shield" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h1>Admin portal</h1>
+          <p class="muted">Restricted entry. This page only signs in accounts with the admin flag.</p>
+        </div>
+        <div class="field">
+          <label>Admin email</label>
+          <input id="admin-email" type="email" autocomplete="email" placeholder="admin@nextdate.app" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input id="admin-password" type="password" autocomplete="current-password" placeholder="••••••••" />
+        </div>
+        <button id="admin-signin" class="btn full" type="button">Sign in</button>
+        <p id="admin-login-error" class="muted admin-login-error hidden"></p>
+        <p class="muted" style="margin-top:14px; font-size:12px;">
+          Not an admin? <a href="./index.html">Back to NextDate</a>.
+        </p>
+      </div>
+    </section>
+
+    <!-- Dashboard (shown after a successful admin login) -->
+    <section id="admin-dash" class="hidden">
+      <header class="admin-portal-bar">
+        <div class="admin-portal-brand">
+          <span class="admin-portal-icon" aria-hidden="true">🛡️</span>
+          <strong>NextDate Admin</strong>
+          <span class="admin-portal-as" id="admin-portal-as"></span>
+        </div>
+        <div class="admin-portal-actions">
+          <a class="btn ghost small" href="./index.html">Open user app</a>
+          <button id="admin-signout" class="btn ghost small" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <section class="admin-shell">
+        <header class="admin-head">
+          <h1>Dashboard</h1>
+          <p class="muted">Moderation tools — every action runs against the live database.</p>
+        </header>
+
+        <nav class="admin-tabs" role="tablist">
+          <button class="admin-tab active" data-tab="users" role="tab" aria-selected="true">Users <span class="admin-tab-count" id="admin-users-count">0</span></button>
+          <button class="admin-tab" data-tab="reports" role="tab" aria-selected="false">Reports <span class="admin-tab-count" id="admin-reports-count">0</span></button>
+        </nav>
+
+        <section class="admin-pane" data-pane="users">
+          <div class="admin-toolbar">
+            <input id="admin-user-search" class="admin-search" placeholder="Search nickname, email, real name, country…" />
+          </div>
+          <div class="admin-list" id="admin-users-list"></div>
+        </section>
+
+        <section class="admin-pane hidden" data-pane="reports">
+          <div class="admin-toolbar">
+            <select id="admin-report-filter" class="admin-filter">
+              <option value="open" selected>Open</option>
+              <option value="resolved">Resolved</option>
+              <option value="dismissed">Dismissed</option>
+              <option value="">All</option>
+            </select>
+          </div>
+          <div class="admin-list" id="admin-reports-list"></div>
+        </section>
+      </section>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="./admin.js"></script>
+</body>
+</html>
