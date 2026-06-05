@@ -1086,20 +1086,31 @@ function renderAuth(root) {
     finally { buttonLoading(btn, false); progressEnd(); }
   };
 
-  $("#btn-signup").onclick = async () => {
+  // Terms gate — the Create account button stays disabled until the
+  // checkbox is ticked. Existing accounts hit /auth/login, which is not
+  // affected, so we don't lock anyone who's already signed up out of
+  // the app retroactively.
+  const agreeCb = $("#agree-terms");
+  const signupBtn = $("#btn-signup");
+  const syncAgree = () => { signupBtn.disabled = !agreeCb.checked; };
+  agreeCb?.addEventListener("change", syncAgree);
+  syncAgree();
+  $("#open-terms")?.addEventListener("click", openTermsModal);
+
+  signupBtn.onclick = async () => {
     const email = $("#email_signup").value.trim();
     const password = $("#password_signup").value;
     if (!email || !password) return toast("Enter email and password.");
     if (password.length < 6) return toast("Password must be at least 6 characters.");
-    const btn = $("#btn-signup");
-    buttonLoading(btn, true);
+    if (!agreeCb?.checked) return toast("Please agree to the Terms first.");
+    buttonLoading(signupBtn, true);
     progressStart();
     try {
       const res = await api("/auth/signup", { method: "POST", body: { email, password }, auth: false });
       setSession(res.token, { id: res.user_id, email: res.email });
       await onSignedIn({ id: res.user_id, email: res.email });
     } catch (err) { toast(err.message); }
-    finally { buttonLoading(btn, false); progressEnd(); }
+    finally { buttonLoading(signupBtn, false); progressEnd(); }
   };
 }
 
@@ -2024,13 +2035,32 @@ function wireGlobalModals() {
     if (e.target.id === "report-modal") closeReportModal();
   });
   $("#report-submit")?.addEventListener("click", submitReport);
+  $("#terms-modal-close")?.addEventListener("click", closeTermsModal);
+  $("#terms-modal-ok")?.addEventListener("click", closeTermsModal);
+  $("#terms-modal")?.addEventListener("click", (e) => {
+    if (e.target.id === "terms-modal") closeTermsModal();
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     closeEmojiModal();
     closeConfirmModal();
     closeReportModal();
+    closeTermsModal();
     closeInfoPanel();
   });
+}
+
+function openTermsModal() {
+  const m = $("#terms-modal");
+  if (!m) return;
+  m.classList.remove("hidden");
+  m.setAttribute("aria-hidden", "false");
+  m.querySelector(".terms-modal-body")?.scrollTo?.({ top: 0 });
+}
+function closeTermsModal() {
+  const m = $("#terms-modal");
+  m?.classList.add("hidden");
+  m?.setAttribute("aria-hidden", "true");
 }
 
 // ---------- confirm modal ----------

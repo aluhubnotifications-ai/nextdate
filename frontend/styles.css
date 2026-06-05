@@ -3780,3 +3780,56 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   outline: 2px solid var(--brand-rose);
   outline-offset: 2px;
 }
+
+/* ----- Terms (signup) ----- */
+.terms-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 0 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.terms-agree input[type="checkbox"] {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand-rose, #ff4e7a);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.terms-agree .link {
+  font-weight: 600;
+  color: var(--brand-rose, #ff4e7a);
+}
+#btn-signup[disabled] {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* ----- Terms modal ----- */
+.terms-modal-card {
+  width: min(560px, 100%);
+  max-height: min(82vh, 720px);
+  display: flex;
+  flex-direction: column;
+}
+.terms-modal-body {
+  padding: 16px 22px 8px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+.terms-modal-body h4 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 700;
+}
+.terms-modal-body p {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.terms-modal-body b { color: var(--text); font-weight: 700; }

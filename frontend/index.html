@@ -270,6 +270,53 @@
     </div>
   </div>
 
+  <!-- Terms modal -->
+  <div class="modal-backdrop hidden" id="terms-modal" aria-hidden="true">
+    <div class="modal-card terms-modal-card" role="dialog" aria-modal="true" aria-label="NextDate Terms">
+      <div class="modal-head">
+        <h3>NextDate — Terms &amp; Community Rules</h3>
+        <button class="icon-btn" id="terms-modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body terms-modal-body">
+        <p class="muted" style="margin:0 0 14px;">
+          NextDate is a student-built space for meeting people in your campus community. By creating an account you agree to the rules below — they keep this place safe for everyone.
+        </p>
+
+        <h4>1. Who can use NextDate</h4>
+        <p class="muted">You must be at least <b>18 years old</b> and a current student, alum, or staff member of your campus community. One account per person. Don't share your login with anyone.</p>
+
+        <h4>2. Be a real person, kindly</h4>
+        <p class="muted">No fake profiles, impersonation, or bots. Be honest about who you are. Treat every person you meet with respect — no harassment, threats, slurs, hate speech, or unwanted sexual content. Block and report instead of escalating.</p>
+
+        <h4>3. Privacy &amp; identity reveal</h4>
+        <p class="muted">Your real name, photo, age, country, and cohort stay hidden until <b>both</b> of you approve the reveal in a chat. Don't pressure anyone to reveal early. Don't try to expose someone outside the app (screenshots, social handles, cross-referencing) — that's grounds for a permanent ban.</p>
+
+        <h4>4. Content you send</h4>
+        <p class="muted">You own what you write and share. Don't post anything illegal, sexually explicit involving minors, doxxing, scams, spam, or anything you don't have the right to share. We can remove content and accounts that break these rules without notice.</p>
+
+        <h4>5. Safety</h4>
+        <p class="muted">If you choose to meet someone in person, meet in public, tell a friend, and trust your gut. NextDate doesn't verify identities — the reveal is an honor system between two people.</p>
+
+        <h4>6. Reports &amp; bans</h4>
+        <p class="muted">Reports go to the community safety team and stay confidential. Serious violations (harassment, doxxing, impersonation, content involving minors) result in an immediate, permanent ban and may be reported to your school or local authorities.</p>
+
+        <h4>7. Your data</h4>
+        <p class="muted">We store the profile info you give us, the messages you send (end-to-end encrypted where possible), your matches, and basic activity needed to run the app. You can delete your account anytime from <b>Profile → Delete account</b> — that removes your profile, matches, and messages permanently.</p>
+
+        <h4>8. No warranty</h4>
+        <p class="muted">NextDate is provided as-is. We do our best to keep it running and safe, but we can't guarantee you'll find a match, a date, or a friend. Use the app at your own discretion.</p>
+
+        <h4>9. Changes</h4>
+        <p class="muted">We may update these terms as the app evolves. If we make a material change, we'll show the new terms the next time you open the app and ask you to accept again.</p>
+      </div>
+      <div class="confirm-actions">
+        <button class="btn" id="terms-modal-ok" type="button">Got it</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Templates -->
   <template id="tpl-auth">
     <section class="center-wrap">
@@ -312,12 +359,16 @@
             <input id="password_signup" type="password" autocomplete="new-password" placeholder="••••••••" />
           </div>
 
-          <button id="btn-signup" class="btn full" type="button">Create account</button>
+          <label class="terms-agree">
+            <input id="agree-terms" type="checkbox" />
+            <span>I'm 18 or older and I agree to the <button type="button" class="link" id="open-terms">NextDate Terms &amp; Community Rules</button>.</span>
+          </label>
+
+          <button id="btn-signup" class="btn full" type="button" disabled>Create account</button>
 
           <p class="auth-switch muted">
             Already have one? <button type="button" class="link" data-go="login">Sign in</button>
           </p>
-          <p class="muted" style="margin-top:6px; font-size:12px;">By creating an account you accept the campus community guidelines. Be kind, be real.</p>
         </div>
       </div>
     </section>
