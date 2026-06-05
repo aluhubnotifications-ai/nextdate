@@ -517,6 +517,7 @@ const views = {
   matches: renderMatches,
   notifications: renderNotifications,
   profile: renderProfile,
+  admin: renderAdmin,
   logout: doLogout,
 };
 
@@ -571,6 +572,12 @@ function setNavVisible(visible) {
   );
   const tabs = document.getElementById("bottom-tabs");
   if (tabs) tabs.classList.toggle("hidden", !visible);
+  // Admin entries stay hidden unless the signed-in profile is an admin —
+  // even when the rest of the nav becomes visible after sign-in.
+  const isAdmin = !!state.profile?.is_admin;
+  document.querySelectorAll(".admin-only").forEach((b) =>
+    b.classList.toggle("hidden", !(visible && isAdmin)),
+  );
   refreshBadges();
 }
 
@@ -740,6 +747,9 @@ async function onSignedIn(user) {
   state.profile = profileRes.data;
   state.prefs = prefsRes.data;
   state.privateIdentity = privRes.data;
+  // Re-evaluate nav visibility now that we know whether this account
+  // carries the admin flag.
+  setNavVisible(true);
 
   if (!state.profile || !state.prefs) {
     return navigate("onboarding");
@@ -3821,6 +3831,183 @@ function buildNotifNode(n) {
     }
   };
   return el;
+}
+
+// ---------- ADMIN ----------
+// Dashboard for the designated admin account (is_admin=true on the
+// profiles row, granted automatically to admin@nextdate.app via DB
+// trigger). Two tabs: every user (with delete) and every report (with
+// resolve / dismiss). All calls go through the backend's /admin/* API
+// which re-checks is_admin server-side — the nav visibility is just UX
+// polish, never the only line of defense.
+async function renderAdmin(root) {
+  if (!state.profile?.is_admin) {
+    root.innerHTML = `<section class="center-wrap"><div class="card"><h1>Admins only</h1><p class="muted">This account doesn't have admin access.</p></div></section>`;
+    return;
+  }
+  root.append($("#tpl-admin").content.cloneNode(true));
+
+  const usersList   = $("#admin-users-list");
+  const reportsList = $("#admin-reports-list");
+  const usersCount  = $("#admin-users-count");
+  const reportsCount = $("#admin-reports-count");
+  const searchInput  = $("#admin-user-search");
+  const reportFilter = $("#admin-report-filter");
+
+  let allUsers = [];
+
+  // Tab switching
+  $$(".admin-tab").forEach((t) => t.addEventListener("click", () => {
+    const which = t.dataset.tab;
+    $$(".admin-tab").forEach((x) => {
+      const on = x.dataset.tab === which;
+      x.classList.toggle("active", on);
+      x.setAttribute("aria-selected", String(on));
+    });
+    $$(".admin-pane").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== which));
+  }));
+
+  function paintUsers(filter = "") {
+    const q = filter.trim().toLowerCase();
+    const visible = !q ? allUsers : allUsers.filter((u) => {
+      const hay = [
+        u.nickname, u.email, u.private?.real_name, u.private?.country, u.private?.cohort,
+        ...(u.prefs?.interests || []), ...(u.prefs?.hobbies || []),
+      ].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+    usersList.innerHTML = "";
+    for (const u of visible) {
+      const priv = u.private || {};
+      const prefs = u.prefs || {};
+      const tagBits = [
+        ...(prefs.interests || []).slice(0, 4),
+        ...(prefs.hobbies || []).slice(0, 3),
+      ].map((t) => `<span class="admin-tag">${escapeHtml(t)}</span>`).join("");
+      const adminPill = u.is_admin ? `<span class="admin-pill">ADMIN</span>` : "";
+      const card = document.createElement("div");
+      card.className = "admin-user-card";
+      card.innerHTML = `
+        <div class="admin-user-head">
+          <div class="admin-avatar">${escapeHtml(u.avatar_url || "🦊")}</div>
+          <div class="admin-user-meta">
+            <div class="admin-user-name">${escapeHtml(u.nickname || "—")} ${adminPill}</div>
+            <div class="admin-user-sub">${escapeHtml(u.email || "—")} · ${escapeHtml(u.gender || "—")} · ${escapeHtml(u.zodiac_sign || "—")}</div>
+          </div>
+          <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Can't delete another admin\"" : ""}>Delete</button>
+        </div>
+        <div class="admin-user-body">
+          <div class="admin-row"><span class="admin-label">Real name</span><span>${escapeHtml(priv.real_name || "—")}</span></div>
+          <div class="admin-row"><span class="admin-label">Age</span><span>${escapeHtml(String(priv.age || "—"))}</span></div>
+          <div class="admin-row"><span class="admin-label">Country</span><span>${escapeHtml(priv.country || "—")}</span></div>
+          <div class="admin-row"><span class="admin-label">Cohort</span><span>${escapeHtml(priv.cohort || "—")}</span></div>
+          <div class="admin-row"><span class="admin-label">Looking for</span><span>${escapeHtml(prefs.target_intent || "—")} · ${escapeHtml(prefs.term_length || "—")}</span></div>
+          ${tagBits ? `<div class="admin-tags">${tagBits}</div>` : ""}
+        </div>`;
+      usersList.appendChild(card);
+    }
+    if (!visible.length) {
+      usersList.innerHTML = `<div class="admin-empty">No users match.</div>`;
+    }
+  }
+
+  function paintReports(rows) {
+    reportsCount.textContent = rows.length;
+    reportsList.innerHTML = "";
+    for (const r of rows) {
+      const reporter = r.reporter?.nickname || r.reporter?.email || r.reporter_id.slice(0, 8);
+      const reported = r.reported?.nickname || r.reported?.email || r.reported_id.slice(0, 8);
+      const statusClass = r.status === "open" ? "open" : r.status === "resolved" ? "resolved" : "dismissed";
+      const card = document.createElement("div");
+      card.className = "admin-report-card";
+      card.innerHTML = `
+        <div class="admin-report-head">
+          <span class="admin-report-status ${statusClass}">${escapeHtml(r.status)}</span>
+          <span class="admin-report-reason">${escapeHtml(r.reason || "—")}</span>
+          <span class="admin-report-time muted">${escapeHtml(formatRelativeTime(r.created_at))}</span>
+        </div>
+        <div class="admin-report-body">
+          <div><b>${escapeHtml(reporter)}</b> reported <b>${escapeHtml(reported)}</b></div>
+          ${r.details ? `<div class="admin-report-details">"${escapeHtml(r.details)}"</div>` : ""}
+        </div>
+        <div class="admin-report-actions">
+          ${r.status === "open" ? `
+            <button class="btn small admin-resolve" data-id="${escapeHtml(r.id)}" data-status="resolved">Resolve</button>
+            <button class="btn ghost small admin-resolve" data-id="${escapeHtml(r.id)}" data-status="dismissed">Dismiss</button>` : `
+            <button class="btn ghost small admin-resolve" data-id="${escapeHtml(r.id)}" data-status="open">Reopen</button>`}
+        </div>`;
+      reportsList.appendChild(card);
+    }
+    if (!rows.length) {
+      reportsList.innerHTML = `<div class="admin-empty">Nothing here.</div>`;
+    }
+  }
+
+  async function loadUsers() {
+    try {
+      allUsers = await api("/admin/users");
+      usersCount.textContent = allUsers.length;
+      paintUsers(searchInput.value || "");
+    } catch (err) {
+      toast(err.message);
+      usersList.innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
+    }
+  }
+  async function loadReports() {
+    try {
+      const status = reportFilter.value;
+      const path = status ? `/admin/reports?status=${encodeURIComponent(status)}` : "/admin/reports";
+      const rows = await api(path);
+      paintReports(rows);
+    } catch (err) {
+      toast(err.message);
+      reportsList.innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  searchInput.addEventListener("input", () => paintUsers(searchInput.value || ""));
+  reportFilter.addEventListener("change", loadReports);
+
+  usersList.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".admin-delete");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const target = allUsers.find((u) => u.id === id);
+    const label = target?.nickname || target?.email || id.slice(0, 8);
+    openConfirmModal({
+      title: `Delete ${label}?`,
+      text: "This wipes their profile, matches, and messages. Cannot be undone.",
+      okLabel: "Delete",
+      onConfirm: async () => {
+        buttonLoading(btn, true);
+        try {
+          await api(`/admin/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+          allUsers = allUsers.filter((u) => u.id !== id);
+          usersCount.textContent = allUsers.length;
+          paintUsers(searchInput.value || "");
+          toast(`Deleted ${label}.`);
+        } catch (err) { toast(err.message); }
+        finally { buttonLoading(btn, false); }
+      },
+    });
+  });
+
+  reportsList.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".admin-resolve");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const status = btn.dataset.status;
+    buttonLoading(btn, true);
+    try {
+      await api(`/admin/reports/${encodeURIComponent(id)}/resolve`, {
+        method: "POST", body: { status },
+      });
+      await loadReports();
+    } catch (err) { toast(err.message); }
+    finally { buttonLoading(btn, false); }
+  });
+
+  await Promise.all([loadUsers(), loadReports()]);
 }
 
 // ---------- PROFILE ----------

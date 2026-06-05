@@ -14,6 +14,7 @@ import re
 import time
 import uuid
 from collections import Counter
+from datetime import datetime, timezone
 from typing import List, Optional
 
 import bcrypt
@@ -170,6 +171,116 @@ def delete_me(uid: str = Depends(caller_id), db: Client = Depends(require_admin)
     here wipes the user from the entire app."""
     db.table("users").delete().eq("id", uid).execute()
     return {"ok": True}
+
+
+# ---------- admin ----------
+def require_admin_caller(uid: str, db: Client) -> None:
+    """Authorize the caller as an admin or raise 403. Used by every
+    /admin/* endpoint — the service key bypasses RLS so we can't rely
+    on the database to enforce this for us."""
+    rows = db.table("profiles").select("is_admin").eq("id", uid).limit(1).execute()
+    if not rows.data or not rows.data[0].get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin only.")
+
+
+@app.get("/admin/users")
+def admin_list_users(
+    uid: str = Depends(caller_id),
+    db: Client = Depends(require_admin),
+):
+    """All accounts, joined with their profile + private identity + prefs.
+    The dashboard renders one row per user with a delete button."""
+    require_admin_caller(uid, db)
+    profiles = db.table("profiles").select(
+        "id, email, nickname, avatar_url, gender, zodiac_sign, is_admin, created_at"
+    ).order("created_at", desc=True).execute()
+    priv = db.table("private_identities").select(
+        "user_id, real_name, age, country, cohort"
+    ).execute()
+    prefs = db.table("match_preferences").select(
+        "user_id, target_intent, term_length, interests, hobbies"
+    ).execute()
+    priv_by_id = {r["user_id"]: r for r in priv.data or []}
+    prefs_by_id = {r["user_id"]: r for r in prefs.data or []}
+    return [
+        {
+            **p,
+            "private": priv_by_id.get(p["id"]),
+            "prefs": prefs_by_id.get(p["id"]),
+        }
+        for p in profiles.data or []
+    ]
+
+
+@app.delete("/admin/users/{target_id}")
+def admin_delete_user(
+    target_id: str,
+    uid: str = Depends(caller_id),
+    db: Client = Depends(require_admin),
+):
+    """Hard-delete the target account. Refuses if the target is the caller
+    (admin must delete themselves via /auth/me) or another admin (so two
+    admins can't accidentally kick each other out)."""
+    require_admin_caller(uid, db)
+    if target_id == uid:
+        raise HTTPException(status_code=400, detail="Use /auth/me to delete your own account.")
+    target_profile = (
+        db.table("profiles").select("is_admin").eq("id", target_id).limit(1).execute()
+    )
+    if target_profile.data and target_profile.data[0].get("is_admin"):
+        raise HTTPException(status_code=400, detail="Can't delete another admin from the dashboard.")
+    db.table("users").delete().eq("id", target_id).execute()
+    return {"ok": True}
+
+
+@app.get("/admin/reports")
+def admin_list_reports(
+    status: Optional[str] = None,
+    uid: str = Depends(caller_id),
+    db: Client = Depends(require_admin),
+):
+    """Reports queue. Filter by status=open / resolved / dismissed; default
+    returns everything, newest first."""
+    require_admin_caller(uid, db)
+    q = db.table("reports").select("*").order("created_at", desc=True)
+    if status:
+        q = q.eq("status", status)
+    reports = q.execute()
+    rows = reports.data or []
+    user_ids = list({r["reporter_id"] for r in rows} | {r["reported_id"] for r in rows})
+    nicknames: dict[str, dict] = {}
+    if user_ids:
+        prof = db.table("profiles").select("id, nickname, email").in_("id", user_ids).execute()
+        nicknames = {p["id"]: p for p in prof.data or []}
+    return [
+        {
+            **r,
+            "reporter": nicknames.get(r["reporter_id"]),
+            "reported": nicknames.get(r["reported_id"]),
+        }
+        for r in rows
+    ]
+
+
+@app.post("/admin/reports/{report_id}/resolve")
+def admin_resolve_report(
+    report_id: str,
+    body: dict = None,
+    uid: str = Depends(caller_id),
+    db: Client = Depends(require_admin),
+):
+    """Mark a report resolved or dismissed."""
+    require_admin_caller(uid, db)
+    new_status = (body or {}).get("status", "resolved")
+    if new_status not in ("resolved", "dismissed", "open"):
+        raise HTTPException(status_code=400, detail="status must be open / resolved / dismissed.")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    db.table("reports").update({
+        "status": new_status,
+        "resolved_at": None if new_status == "open" else now_iso,
+        "resolved_by": None if new_status == "open" else uid,
+    }).eq("id", report_id).execute()
+    return {"ok": True, "status": new_status}
 
 
 # ---------- TF-IDF cosine matching ----------

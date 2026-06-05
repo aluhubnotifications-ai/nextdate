@@ -3833,3 +3833,176 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   line-height: 1.55;
 }
 .terms-modal-body b { color: var(--text); font-weight: 700; }
+
+/* ===== Admin dashboard ===== */
+.admin-shell {
+  padding: 20px 22px 80px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+.admin-head h1 { margin: 0 0 4px; }
+.admin-head p { margin: 0 0 18px; }
+.admin-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 16px;
+}
+.admin-tab {
+  background: transparent;
+  border: none;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.admin-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--brand-rose, #ff4e7a);
+}
+.admin-tab-count {
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  min-width: 22px;
+  text-align: center;
+}
+.admin-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.admin-search,
+.admin-filter {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.admin-filter { flex: 0 0 auto; min-width: 140px; }
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.admin-empty {
+  text-align: center;
+  padding: 32px 12px;
+  color: var(--text-dim);
+  background: var(--bg-elevated);
+  border-radius: 12px;
+}
+.admin-user-card,
+.admin-report-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.admin-user-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.admin-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex: 0 0 auto;
+}
+.admin-user-meta { flex: 1 1 auto; min-width: 0; }
+.admin-user-name {
+  font-weight: 700;
+  font-size: 15px;
+  display: flex; align-items: center; gap: 8px;
+}
+.admin-user-sub {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-pill {
+  background: var(--brand-grad, linear-gradient(90deg,#ff3d6e,#ff8a3d));
+  color: #fff;
+  font-size: 10px;
+  letter-spacing: .04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+.btn.small {
+  padding: 7px 12px;
+  font-size: 12.5px;
+  flex: 0 0 auto;
+}
+.admin-user-body {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px 16px;
+  font-size: 13px;
+}
+.admin-row { display: flex; gap: 8px; }
+.admin-label {
+  color: var(--text-dim);
+  min-width: 80px;
+}
+.admin-tags {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 4px;
+}
+.admin-tag {
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.admin-report-head {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px;
+}
+.admin-report-status {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+.admin-report-status.open      { background: #ff3d6e22; color: #ff5d8a; }
+.admin-report-status.resolved  { background: #2bd17e22; color: #4ad48f; }
+.admin-report-status.dismissed { background: #6a6a6a22; color: var(--text-dim); }
+.admin-report-reason {
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.admin-report-time { margin-left: auto; font-size: 12px; }
+.admin-report-body { margin: 10px 0 12px; font-size: 13.5px; line-height: 1.5; }
+.admin-report-details {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 8px;
+  font-style: italic;
+  color: var(--text-dim);
+}
+.admin-report-actions { display: flex; gap: 8px; }

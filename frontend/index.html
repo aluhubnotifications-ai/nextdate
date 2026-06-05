@@ -69,6 +69,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <span class="nav-label">Profile</span>
         </button>
+        <button data-view="admin" class="hidden admin-only" title="Admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span class="nav-label">Admin</span>
+        </button>
       </nav>
 
       <div class="nav-spacer"></div>
@@ -137,6 +141,10 @@
         <button data-view="profile" class="bottom-tab" title="Profile">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           <span>Profile</span>
+        </button>
+        <button data-view="admin" class="bottom-tab admin-only hidden" title="Admin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Admin</span>
         </button>
       </nav>
     </div>
@@ -788,6 +796,39 @@
           <p class="profile-danger-hint">This permanently removes your profile, matches, and messages.</p>
         </div>
       </div>
+    </section>
+  </template>
+
+  <template id="tpl-admin">
+    <section class="admin-shell">
+      <header class="admin-head">
+        <h1>Admin dashboard</h1>
+        <p class="muted">Moderation tools — every action runs against the live database. Be careful.</p>
+      </header>
+
+      <nav class="admin-tabs" role="tablist">
+        <button class="admin-tab active" data-tab="users" role="tab" aria-selected="true">Users <span class="admin-tab-count" id="admin-users-count">0</span></button>
+        <button class="admin-tab" data-tab="reports" role="tab" aria-selected="false">Reports <span class="admin-tab-count" id="admin-reports-count">0</span></button>
+      </nav>
+
+      <section class="admin-pane" data-pane="users">
+        <div class="admin-toolbar">
+          <input id="admin-user-search" class="admin-search" placeholder="Search nickname, email, real name, country…" />
+        </div>
+        <div class="admin-list" id="admin-users-list"></div>
+      </section>
+
+      <section class="admin-pane hidden" data-pane="reports">
+        <div class="admin-toolbar">
+          <select id="admin-report-filter" class="admin-filter">
+            <option value="open" selected>Open</option>
+            <option value="resolved">Resolved</option>
+            <option value="dismissed">Dismissed</option>
+            <option value="">All</option>
+          </select>
+        </div>
+        <div class="admin-list" id="admin-reports-list"></div>
+      </section>
     </section>
   </template>
 
