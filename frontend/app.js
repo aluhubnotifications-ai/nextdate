@@ -3719,6 +3719,15 @@ function renderProfile(root) {
             <span class="nd-switch-track"><span class="nd-switch-thumb"></span></span>
           </button>
         </div>
+        <div class="identity-row notif-toggle-row">
+          <span>
+            Notification sound
+            <span class="muted" id="sound-toggle-sub" style="display:block; font-weight:400; font-size:12px;">—</span>
+          </span>
+          <button class="nd-switch" id="sound-toggle" type="button" role="switch" aria-checked="false">
+            <span class="nd-switch-track"><span class="nd-switch-thumb"></span></span>
+          </button>
+        </div>
       </div>
     </div>
     <div class="profile-section">
@@ -3781,6 +3790,38 @@ function wireNotifToggle() {
       const res = await window.requestNotificationPermission?.();
       if (res !== "granted") { paint(); return; }
       localStorage.removeItem("nd_notifs_off");
+    }
+    paint();
+  };
+
+  paint();
+  wireSoundToggle();
+}
+
+function wireSoundToggle() {
+  const sw  = document.getElementById("sound-toggle");
+  const sub = document.getElementById("sound-toggle-sub");
+  if (!sw || !sub) return;
+  const nd = window.__nd;
+
+  function paint() {
+    const on = nd?.soundEnabled;
+    sw.classList.toggle("on", !!on);
+    sw.setAttribute("aria-checked", on ? "true" : "false");
+    sub.textContent = on
+      ? "On — a phone-style ding plays when something arrives."
+      : "Off — notifications stay silent.";
+  }
+
+  sw.onclick = () => {
+    const on = nd?.soundEnabled;
+    if (on) {
+      localStorage.setItem("nd_sound_off", "1");
+      toast("Notification sound off.");
+    } else {
+      localStorage.removeItem("nd_sound_off");
+      try { window.playChime?.(); } catch {}
+      toast("Notification sound on.");
     }
     paint();
   };
@@ -4009,8 +4050,60 @@ const nd = {
     if (localStorage.getItem("nd_notifs_off") === "1") return false;
     return this.permission === "granted";
   },
+  get soundEnabled() {
+    // Sound is on by default — only off if the user explicitly muted it
+    // in Profile. Decoupled from system notifications so users still get
+    // an audible cue when the browser blocks notifications or when the
+    // app is in the foreground (when no system popup fires).
+    return localStorage.getItem("nd_sound_off") !== "1";
+  },
 };
 window.__nd = nd; // exposed for the profile toggle handler
+
+// ── Chime synth ──
+// Phone-style "ding-ding" generated on demand with WebAudio so it works
+// offline, costs no extra request, and never blocks shipping on a
+// missing audio file. The AudioContext can't make sound until a user
+// gesture happens, so we lazily unlock it on the first interaction.
+let _ndAudio = null;
+function _unlockAudio() {
+  if (_ndAudio) return;
+  try {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (Ctor) _ndAudio = new Ctor();
+  } catch {}
+}
+["pointerdown", "keydown", "touchstart"].forEach((evt) => {
+  window.addEventListener(evt, _unlockAudio, { once: true, passive: true });
+});
+
+function playChime() {
+  if (!nd.soundEnabled) return;
+  if (!_ndAudio) return; // no user gesture yet — silent
+  const ctx = _ndAudio;
+  if (ctx.state === "suspended") { try { ctx.resume(); } catch {} }
+  const now = ctx.currentTime;
+
+  // Two short bell-ish tones: 880 Hz (A5) → 1320 Hz (E6). Sine carrier
+  // shaped by a fast attack + exponential decay so it sounds like a
+  // soft notification bell, not a beep.
+  function tone(freq, startOffset, dur, peak = 0.16) {
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const t0 = now + startOffset;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0005, t0 + dur);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.05);
+  }
+  tone(880,  0,    0.22);
+  tone(1320, 0.09, 0.28);
+}
+window.playChime = playChime;
 
 async function requestNotificationPermission() {
   if (!nd.supported) {
@@ -4045,7 +4138,8 @@ async function showSystemNotification({ title, body = "", icon, tag, data = {} }
     badge: "./icon.svg",
     tag: tag || undefined,
     data,
-    vibrate: [60, 30, 60],
+    vibrate: [80, 40, 80, 40, 120], // phone-style buzz pattern
+    silent: false,                   // let the OS play its notification sound
     renotify: !!tag,
   };
   try {
@@ -4073,11 +4167,14 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-// Bridge for the in-app message stream → system notifications.
+// Bridge for the in-app message stream → system notifications + chime.
 function notifyForMessage(m) {
   if (!m || m.sender_id === state.user?.id) return;
-  if (state.activeSession?.id === m.session_id &&
-      document.visibilityState === "visible" && document.hasFocus()) return;
+  // Skip everything when the user is actively typing in this chat — a
+  // ding for a message they just watched land would be jarring.
+  const inActiveChat = state.activeSession?.id === m.session_id &&
+    document.visibilityState === "visible" && document.hasFocus();
+  if (inActiveChat) return;
   const peer = state.peerBySession?.get(m.session_id) || {};
   const title = peer.nickname ? `New message from ${peer.nickname}` : "New message";
   const preview = (typeof m.body === "string" && m.body.trim())
@@ -4089,6 +4186,10 @@ function notifyForMessage(m) {
     tag: `msg:${m.session_id}`,
     data: { sessionId: m.session_id, view: "chats", url: "./" },
   });
+  // Always ding in-app too. When the system notification fires the OS
+  // also plays its own sound — that's expected phone-like behavior;
+  // both go off briefly but feel like one event.
+  try { playChime(); } catch {}
 }
 
 function notifyForGeneric(n) {
@@ -4104,6 +4205,7 @@ function notifyForGeneric(n) {
       url: "./",
     },
   });
+  try { playChime(); } catch {}
 }
 // Both bridges are read by app code via the global so they're easy to stub.
 window.notifyForMessage = notifyForMessage;
