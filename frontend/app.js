@@ -226,24 +226,52 @@ function clearSession() {
 }
 
 // ---------- backend API ----------
+// Backend runs on Render's free tier and sleeps after ~15 min of
+// idleness; the first request after that takes 30–50s to wake up.
+// We fire a /healthz prewarm at page load (see init), and any API call
+// that crosses 3s pops a one-time "Waking up server…" toast so the user
+// knows the app isn't frozen.
+let _coldStartToastShown = false;
+function showColdStartToast() {
+  if (_coldStartToastShown) return;
+  _coldStartToastShown = true;
+  toast("Waking up the server… give it a few seconds.", 8000);
+}
 async function api(path, { method = "GET", body, auth = true } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (auth) {
     const t = tokens.get();
     if (t) headers.Authorization = `Bearer ${t}`;
   }
-  const res = await fetch(`${BACKEND_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) {
-    const detail = data?.detail || res.statusText;
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  const slowTimer = setTimeout(showColdStartToast, 3000);
+  try {
+    const res = await fetch(`${BACKEND_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!res.ok) {
+      const detail = data?.detail || res.statusText;
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    return data;
+  } finally {
+    clearTimeout(slowTimer);
   }
-  return data;
+}
+
+// Prewarm the Render free-tier backend so it's already awake by the
+// time the user submits the login form. Fire-and-forget; failures are
+// silent (the real call will retry through api() anyway).
+function prewarmBackend() {
+  if (DEMO_MODE) return;
+  if (!BACKEND_URL || BACKEND_URL.includes("YOUR-")) return;
+  try {
+    fetch(`${BACKEND_URL}/healthz`, { method: "GET", mode: "cors", cache: "no-store" })
+      .catch(() => {});
+  } catch { /* noop */ }
 }
 
 // ---------- DOM helpers ----------
@@ -696,6 +724,7 @@ function initTheme() {
 (async function init() {
   initTheme();
   wireGlobalModals();
+  prewarmBackend();
 
   if (DEMO_MODE) {
     state.user            = { id: DEMO_ME.id, email: DEMO_ME.email };
@@ -2425,9 +2454,12 @@ function filterSessions(query) {
   });
 }
 
-async function loadSessions() {
+async function loadSessions({ background = false } = {}) {
   const list = $("#session-list");
-  skelSessionList(list);
+  // Background refreshes (the periodic sidebar poll) must not flash
+  // skeleton placeholders or animate the top progress bar — that's what
+  // made the sidebar look like it was "refreshing every few seconds".
+  if (!background) skelSessionList(list);
 
   let data;
   if (DEMO_MODE) {
@@ -2435,14 +2467,14 @@ async function loadSessions() {
       (s) => s.user_a === state.user.id || s.user_b === state.user.id,
     );
   } else {
-    progressStart();
+    if (!background) progressStart();
     const res = await supabase
       .from("chat_sessions")
       .select("*")
       .or(`user_a.eq.${state.user.id},user_b.eq.${state.user.id}`)
       .order("created_at", { ascending: false });
-    progressEnd();
-    if (res.error) { list.innerHTML = ""; return toast(res.error.message); }
+    if (!background) progressEnd();
+    if (res.error) { if (!background) list.innerHTML = ""; return toast(res.error.message); }
     data = res.data;
   }
   // Hide sessions the user has just unmatched but where the Undo
@@ -3581,8 +3613,8 @@ function startSessionsPolling() {
   _sessionsPollTimer = setInterval(() => {
     if (document.hidden) return;
     if (!document.getElementById("session-list")) return;
-    loadSessions();
-  }, 10000);
+    loadSessions({ background: true });
+  }, 30000);
 }
 function stopSessionsPolling() {
   if (_sessionsPollTimer) { clearInterval(_sessionsPollTimer); _sessionsPollTimer = null; }

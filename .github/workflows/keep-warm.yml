@@ -1,0 +1,31 @@
+name: Keep backend warm
+
+# Render's free tier spins the backend down after ~15 minutes of
+# inactivity, and the cold start takes 30–50 seconds — which is why
+# first-time NextDate users see a long blank screen on login. This
+# workflow pings /healthz every 10 minutes so the backend never gets
+# the chance to sleep.
+#
+# GitHub Actions cron is best-effort: it can be delayed by 5–15 minutes
+# during heavy load on shared runners. A 10-min interval gives us
+# enough headroom that the backend almost always wakes up within
+# Render's 15-min idle window.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping /healthz
+        run: |
+          # Up to 60s for the cold start, then fail loud so a broken
+          # backend shows up in the Actions tab instead of silently
+          # never warming.
+          curl --fail --show-error --silent \
+               --max-time 60 \
+               https://nextdate-5may.onrender.com/healthz
