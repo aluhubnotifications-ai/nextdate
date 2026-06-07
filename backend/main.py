@@ -398,11 +398,12 @@ def get_curated_suggestions(
     # every other user (just unranked).
     my_pref = my_pref_q.data[0] if my_pref_q.data else None
 
-    # Opposite-binary gender filter. Men see Women, Women see Men.
-    # Non-binary / "Other" / unset are wildcards on both sides — they
-    # see everyone and everyone sees them. Without this, a man's deck
-    # was full of other men (and vice versa) because the lexical match
-    # doesn't care about gender at all.
+    # Opposite-sex gender filter. Men see Women, Women see Men. The
+    # only wildcard is "Prefer not to say" (stored as NULL/empty) — those
+    # users see everyone and everyone sees them. Any legacy rows still
+    # carrying "Non-binary" or "Other" from a previous version of the
+    # signup form will not match anyone until the user edits their
+    # profile and picks Woman, Man, or Prefer not to say.
     my_profile_q = (
         db.table("profiles")
         .select("gender")
@@ -411,13 +412,16 @@ def get_curated_suggestions(
         .execute()
     )
     my_gender = (my_profile_q.data[0].get("gender") if my_profile_q.data else None) or None
-    WILDCARD_GENDERS = {None, "", "Non-binary", "Other"}
+    WILDCARD_GENDERS = {None, ""}
     if my_gender == "Man":
         allowed_genders: set | None = {"Woman"} | WILDCARD_GENDERS
     elif my_gender == "Woman":
         allowed_genders = {"Man"} | WILDCARD_GENDERS
-    else:
+    elif my_gender in WILDCARD_GENDERS:
         allowed_genders = None  # wildcard viewer — see everyone
+    else:
+        # Legacy non-binary/other accounts: only match the wildcard pool.
+        allowed_genders = set(WILDCARD_GENDERS)
 
     # Build the gender map for every other profile in one shot so we can
     # filter both candidate sources (match_preferences rows and the
