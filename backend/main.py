@@ -34,11 +34,14 @@ from models import (
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
 JWT_TTL_SECONDS = int(os.environ.get("JWT_TTL_SECONDS", "604800"))  # 7 days
 
 if not (SUPABASE_URL and SUPABASE_SERVICE_KEY and SUPABASE_JWT_SECRET):
     print("[warn] SUPABASE_URL / SUPABASE_SERVICE_KEY / SUPABASE_JWT_SECRET not all set — auth + matching will 500.")
+if not SUPABASE_ANON_KEY:
+    print("[warn] SUPABASE_ANON_KEY not set — frontend config endpoint will fail.")
 
 def _build_admin_client() -> Optional[Client]:
     if not (SUPABASE_URL and SUPABASE_SERVICE_KEY):
@@ -135,6 +138,22 @@ def verify_password(plain: str, hashed: str) -> bool:
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+@app.get("/config")
+def config():
+    """Return frontend config (Supabase URL / anon key, backend URL).
+    Unauthenticated so the frontend can load it before the user logs in.
+    The Supabase anon key is public by design (it's a client key), but
+    it's never hardcoded in the frontend source code — it comes from
+    backend environment variables instead."""
+    if not SUPABASE_URL:
+        return {"error": "Backend not configured. Set SUPABASE_URL in environment."}
+    return {
+        "supabase_url": SUPABASE_URL,
+        "supabase_anon_key": SUPABASE_ANON_KEY,
+        "backend_url": os.environ.get("BACKEND_URL", "https://nextdate-5may.onrender.com"),
+    }
 
 
 @app.post("/auth/signup", response_model=AuthResponse)

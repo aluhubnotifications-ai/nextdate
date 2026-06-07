@@ -1,14 +1,13 @@
 // NextDate — frontend
 // Custom auth (FastAPI backend) + Supabase Realtime/Postgres for data.
 //
-// ───── HARDCODED CONFIG ─────
-// Edit the four constants below for your deployment.
-// Matching is intentionally left to be swapped with an AI-driven engine later.
+// Config (SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL) is loaded
+// dynamically from the backend /config endpoint, never hardcoded.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-const SUPABASE_URL      = "https://wkdamyjswlixzkwehxyc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZGFteWpzd2xpeHprd2VoeHljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzgyNTksImV4cCI6MjA5NTkxNDI1OX0.8CuPl4ZhLwZ2MPW6DUnuRNcZKQyzpw-SLdg6C8KYxcg";
-const BACKEND_URL       = "https://nextdate-5may.onrender.com";
+let SUPABASE_URL = "";
+let SUPABASE_ANON_KEY = "";
+let BACKEND_URL = "";
 
 // ───── DEMO MODE ─────
 // When true, the app runs entirely on hardcoded users / sessions / messages
@@ -720,8 +719,31 @@ function initTheme() {
   document.getElementById("mobile-theme-toggle")?.addEventListener("click", toggle);
 }
 
+// Load config from backend before anything else. Keeps sensitive
+// keys (Supabase anon key) out of the source code entirely.
+async function loadConfig() {
+  try {
+    // Try /config first; if that 404s (old backend), fall back to asking
+    // the user to set the hardcoded values. The endpoint is unauthenticated.
+    const res = await fetch("/config", { method: "GET", mode: "cors" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const cfg = await res.json();
+    SUPABASE_URL = cfg.supabase_url || "";
+    SUPABASE_ANON_KEY = cfg.supabase_anon_key || "";
+    BACKEND_URL = cfg.backend_url || "";
+  } catch (e) {
+    console.warn("Failed to load /config:", e.message);
+    // If the backend config endpoint is unavailable, check if the user
+    // has set the values in the window object (for local dev).
+    SUPABASE_URL = window["NEXTDATE_SUPABASE_URL"] || "";
+    SUPABASE_ANON_KEY = window["NEXTDATE_SUPABASE_ANON_KEY"] || "";
+    BACKEND_URL = window["NEXTDATE_BACKEND_URL"] || "";
+  }
+}
+
 // ---------- init ----------
 (async function init() {
+  await loadConfig();
   initTheme();
   wireGlobalModals();
   prewarmBackend();
