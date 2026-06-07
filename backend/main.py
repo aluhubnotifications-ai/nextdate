@@ -398,6 +398,48 @@ def get_curated_suggestions(
     # every other user (just unranked).
     my_pref = my_pref_q.data[0] if my_pref_q.data else None
 
+    # Opposite-binary gender filter. Men see Women, Women see Men.
+    # Non-binary / "Other" / unset are wildcards on both sides — they
+    # see everyone and everyone sees them. Without this, a man's deck
+    # was full of other men (and vice versa) because the lexical match
+    # doesn't care about gender at all.
+    my_profile_q = (
+        db.table("profiles")
+        .select("gender")
+        .eq("id", user_id)
+        .limit(1)
+        .execute()
+    )
+    my_gender = (my_profile_q.data[0].get("gender") if my_profile_q.data else None) or None
+    WILDCARD_GENDERS = {None, "", "Non-binary", "Other"}
+    if my_gender == "Man":
+        allowed_genders: set | None = {"Woman"} | WILDCARD_GENDERS
+    elif my_gender == "Woman":
+        allowed_genders = {"Man"} | WILDCARD_GENDERS
+    else:
+        allowed_genders = None  # wildcard viewer — see everyone
+
+    # Build the gender map for every other profile in one shot so we can
+    # filter both candidate sources (match_preferences rows and the
+    # prefs-less profile fallback) against `allowed_genders`.
+    all_profiles_q = (
+        db.table("profiles")
+        .select("id, gender")
+        .neq("id", user_id)
+        .execute()
+    )
+    gender_by_id: dict[str, str | None] = {
+        p["id"]: (p.get("gender") or None) for p in (all_profiles_q.data or [])
+    }
+    def _is_visible(uid: str) -> bool:
+        if allowed_genders is None:
+            return True
+        # Unknown profile (e.g. just-deleted) — keep it; the later
+        # profile join will drop it if it really is gone.
+        if uid not in gender_by_id:
+            return True
+        return gender_by_id[uid] in allowed_genders
+
     # Always pull the whole pool of other users with preferences. Intent
     # and term used to be hard filters, but that meant a new user picking
     # a niche combo (e.g. "Friendships / Short-term") saw "Check back
@@ -409,24 +451,24 @@ def get_curated_suggestions(
         .execute()
     )
 
-    rows = [r for r in (candidates_q.data or []) if r["user_id"] != user_id]
+    rows = [
+        r for r in (candidates_q.data or [])
+        if r["user_id"] != user_id and _is_visible(r["user_id"])
+    ]
 
     # If nobody has filled in preferences yet (or the caller hasn't), make
     # sure we still surface every other profile so Discover is never empty.
     profile_ids_with_prefs = {r["user_id"] for r in rows}
-    extra_profiles_q = (
-        db.table("profiles")
-        .select("id")
-        .neq("id", user_id)
-        .execute()
-    )
-    for p in extra_profiles_q.data or []:
-        if p["id"] not in profile_ids_with_prefs:
-            rows.append({
-                "user_id": p["id"], "interests": [], "hobbies": [],
-                "leisure_time": None, "wants_in_relationship": None,
-                "target_intent": None, "term_length": None,
-            })
+    for pid, _ in gender_by_id.items():
+        if pid in profile_ids_with_prefs:
+            continue
+        if not _is_visible(pid):
+            continue
+        rows.append({
+            "user_id": pid, "interests": [], "hobbies": [],
+            "leisure_time": None, "wants_in_relationship": None,
+            "target_intent": None, "term_length": None,
+        })
 
     if not rows:
         return []
