@@ -2038,7 +2038,10 @@ async function renderChats(root) {
   $("#msg-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
-  $("#msg-input").addEventListener("input", autoGrowTextarea);
+  $("#msg-input").addEventListener("input", () => {
+    autoGrowTextarea();
+    onMsgInputTyping();
+  });
   $("#reveal-btn").onclick = approveReveal;
   $("#reveal-dismiss")?.addEventListener("click", () => {
     if (!state.activeSession) return;
@@ -2736,6 +2739,9 @@ async function openSession(sessionId) {
   // UPDATE channel.
   markPeerMessagesRead(sessionId);
   await refreshRevealState();
+  // Drop any stale typing indicator from a previously-open chat before
+  // wiring the new session's broadcast channel.
+  resetTypingState();
   if (!DEMO_MODE) subscribeRealtime(sessionId);
 }
 
@@ -3518,6 +3524,9 @@ async function sendMessage() {
   state.pendingAttachments = [];
   renderPendingAttachments();
   autoGrowTextarea();
+  // I've just sent — broadcast "stopped typing" so the peer's dots
+  // disappear immediately instead of waiting for the auto-hide.
+  sendTypingPing(false);
   const sessionId = state.activeSession.id;
 
   const replyToId = state.replyTo?.id || null;
@@ -3593,6 +3602,69 @@ function hideTyping() {
   document.getElementById("typing-indicator")?.remove();
 }
 
+// ---------- realtime typing indicator ----------
+// showPeerTyping is showTyping plus a 3.5s auto-hide timer — even if the
+// peer's "typing:false" broadcast is lost (network blip, tab closed mid
+// keystroke), the dots disappear on their own. Every new ping resets the
+// timer, so the indicator only hides after they've been idle.
+let _peerTypingHideTimer = null;
+function showPeerTyping() {
+  showTyping();
+  clearTimeout(_peerTypingHideTimer);
+  _peerTypingHideTimer = setTimeout(hidePeerTyping, 3500);
+}
+function hidePeerTyping() {
+  clearTimeout(_peerTypingHideTimer);
+  _peerTypingHideTimer = null;
+  hideTyping();
+}
+
+// Throttled "I'm typing" broadcast. Fires at most once every 1.5s while
+// the user is actively typing, plus a final "stopped" event after 2.5s
+// of silence (or immediately when the input goes empty / on send).
+let _typingLastSentAt = 0;
+let _typingStopTimer = null;
+let _typingLastSentState = false; // last value we broadcast (true/false)
+function sendTypingPing(typing) {
+  if (DEMO_MODE) return;
+  const ch = state.messagesChannel;
+  if (!ch || !state.user) return;
+  // De-dupe: if we just broadcast the same state recently, don't spam.
+  const now = Date.now();
+  if (typing && _typingLastSentState && now - _typingLastSentAt < 1500) return;
+  if (!typing && !_typingLastSentState) return;
+  _typingLastSentAt = now;
+  _typingLastSentState = typing;
+  try {
+    ch.send({
+      type: "broadcast",
+      event: "typing",
+      payload: { user_id: state.user.id, typing },
+    });
+  } catch { /* noop */ }
+}
+function onMsgInputTyping() {
+  const ta = document.getElementById("msg-input");
+  const empty = !ta || !ta.value.trim();
+  if (empty) {
+    // Cancel any pending stop and send "stopped" immediately.
+    clearTimeout(_typingStopTimer);
+    _typingStopTimer = null;
+    sendTypingPing(false);
+    return;
+  }
+  sendTypingPing(true);
+  clearTimeout(_typingStopTimer);
+  _typingStopTimer = setTimeout(() => sendTypingPing(false), 2500);
+}
+function resetTypingState() {
+  clearTimeout(_typingStopTimer);
+  _typingStopTimer = null;
+  _typingLastSentState = false;
+  _typingLastSentAt = 0;
+  hidePeerTyping();
+}
+
 function simulateDemoReply(sessionId) {
   if (!state.activeSession || state.activeSession.id !== sessionId) return;
   const s = state.activeSession;
@@ -3610,7 +3682,7 @@ function simulateDemoReply(sessionId) {
 
 function subscribeRealtime(sessionId) {
   state.messagesChannel = supabase
-    .channel(`messages:${sessionId}`)
+    .channel(`messages:${sessionId}`, { config: { broadcast: { self: false } } })
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages", filter: `session_id=eq.${sessionId}` },
@@ -3621,6 +3693,9 @@ function subscribeRealtime(sessionId) {
         // ack it immediately so their bubble flips to ✓✓.
         if (payload.new?.sender_id && payload.new.sender_id !== state.user?.id) {
           markPeerMessagesRead(sessionId);
+          // Peer hit send → they're done typing. Drop the indicator
+          // immediately instead of waiting for the 3.5s auto-hide.
+          hidePeerTyping();
         }
       },
     )
@@ -3640,6 +3715,15 @@ function subscribeRealtime(sessionId) {
         }
       },
     )
+    .on("broadcast", { event: "typing" }, (msg) => {
+      // Typing pings from the peer. self:false above filters our own
+      // pings, but double-check sender_id anyway in case it ever fires.
+      const p = msg?.payload || {};
+      if (!p.user_id || p.user_id === state.user?.id) return;
+      if (state.activeSession?.id !== sessionId) return;
+      if (p.typing) showPeerTyping();
+      else hidePeerTyping();
+    })
     .subscribe();
 
   state.sessionChannel = supabase
