@@ -2739,10 +2739,13 @@ async function openSession(sessionId) {
   // UPDATE channel.
   markPeerMessagesRead(sessionId);
   await refreshRevealState();
-  // Drop any stale typing indicator from a previously-open chat before
-  // wiring the new session's broadcast channel.
+  // Drop any stale typing indicator from a previously-open chat, then
+  // open a dedicated broadcast channel for this session's typing pings.
   resetTypingState();
-  if (!DEMO_MODE) subscribeRealtime(sessionId);
+  if (!DEMO_MODE) {
+    subscribeRealtime(sessionId);
+    subscribeTypingChannel(sessionId);
+  }
 }
 
 async function loadMessages(sessionId) {
@@ -3622,26 +3625,89 @@ function hidePeerTyping() {
 // Throttled "I'm typing" broadcast. Fires at most once every 1.5s while
 // the user is actively typing, plus a final "stopped" event after 2.5s
 // of silence (or immediately when the input goes empty / on send).
+//
+// We use a dedicated typing channel (separate from state.messagesChannel)
+// because broadcasts are silently dropped if the channel isn't in
+// SUBSCRIBED state — using a dedicated channel lets us track that state
+// explicitly and queue the latest ping until the join completes.
+let _typingChannel = null;
+let _typingChannelSessionId = null;
+let _typingChannelSubscribed = false;
+let _typingPendingPing = null;       // last ping waiting for SUBSCRIBED
 let _typingLastSentAt = 0;
 let _typingStopTimer = null;
-let _typingLastSentState = false; // last value we broadcast (true/false)
+let _typingLastSentState = false;    // last value we broadcast (true/false)
+
+function subscribeTypingChannel(sessionId) {
+  if (DEMO_MODE || !supabase || !state.user) return;
+  if (_typingChannel && _typingChannelSessionId === sessionId) return;
+  if (_typingChannel) {
+    try { supabase.removeChannel(_typingChannel); } catch {}
+    _typingChannel = null;
+    _typingChannelSubscribed = false;
+  }
+  _typingChannelSessionId = sessionId;
+  _typingChannel = supabase
+    .channel(`typing:${sessionId}`, { config: { broadcast: { self: false } } })
+    .on("broadcast", { event: "typing" }, (msg) => {
+      const p = msg?.payload || {};
+      if (!p.user_id || p.user_id === state.user?.id) return;
+      if (state.activeSession?.id !== sessionId) return;
+      console.debug("[typing] peer", p.typing ? "started" : "stopped");
+      if (p.typing) showPeerTyping();
+      else hidePeerTyping();
+    })
+    .subscribe((status) => {
+      console.debug("[typing] channel status:", status);
+      if (status === "SUBSCRIBED") {
+        _typingChannelSubscribed = true;
+        // Flush any keystroke that arrived during the connect window.
+        if (_typingPendingPing !== null) {
+          const pending = _typingPendingPing;
+          _typingPendingPing = null;
+          sendTypingPing(pending);
+        }
+      } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+        _typingChannelSubscribed = false;
+      }
+    });
+}
+
+function teardownTypingChannel() {
+  if (_typingChannel) {
+    try { supabase?.removeChannel(_typingChannel); } catch {}
+  }
+  _typingChannel = null;
+  _typingChannelSessionId = null;
+  _typingChannelSubscribed = false;
+  _typingPendingPing = null;
+}
+
 function sendTypingPing(typing) {
   if (DEMO_MODE) return;
-  const ch = state.messagesChannel;
-  if (!ch || !state.user) return;
-  // De-dupe: if we just broadcast the same state recently, don't spam.
+  if (!state.user || !state.activeSession) return;
+  // If the channel isn't ready yet, remember the latest desired state
+  // and flush it the moment SUBSCRIBED fires.
+  if (!_typingChannel || !_typingChannelSubscribed) {
+    _typingPendingPing = typing;
+    return;
+  }
+  // De-dupe: don't spam the same state.
   const now = Date.now();
   if (typing && _typingLastSentState && now - _typingLastSentAt < 1500) return;
   if (!typing && !_typingLastSentState) return;
   _typingLastSentAt = now;
   _typingLastSentState = typing;
-  try {
-    ch.send({
+  _typingChannel
+    .send({
       type: "broadcast",
       event: "typing",
       payload: { user_id: state.user.id, typing },
-    });
-  } catch { /* noop */ }
+    })
+    .then((status) => {
+      if (status !== "ok") console.warn("[typing] send status:", status);
+    })
+    .catch((err) => console.warn("[typing] send error:", err?.message || err));
 }
 function onMsgInputTyping() {
   const ta = document.getElementById("msg-input");
@@ -3662,7 +3728,9 @@ function resetTypingState() {
   _typingStopTimer = null;
   _typingLastSentState = false;
   _typingLastSentAt = 0;
+  _typingPendingPing = null;
   hidePeerTyping();
+  teardownTypingChannel();
 }
 
 function simulateDemoReply(sessionId) {
@@ -3682,7 +3750,7 @@ function simulateDemoReply(sessionId) {
 
 function subscribeRealtime(sessionId) {
   state.messagesChannel = supabase
-    .channel(`messages:${sessionId}`, { config: { broadcast: { self: false } } })
+    .channel(`messages:${sessionId}`)
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "messages", filter: `session_id=eq.${sessionId}` },
@@ -3715,15 +3783,6 @@ function subscribeRealtime(sessionId) {
         }
       },
     )
-    .on("broadcast", { event: "typing" }, (msg) => {
-      // Typing pings from the peer. self:false above filters our own
-      // pings, but double-check sender_id anyway in case it ever fires.
-      const p = msg?.payload || {};
-      if (!p.user_id || p.user_id === state.user?.id) return;
-      if (state.activeSession?.id !== sessionId) return;
-      if (p.typing) showPeerTyping();
-      else hidePeerTyping();
-    })
     .subscribe();
 
   state.sessionChannel = supabase
@@ -3789,6 +3848,8 @@ function stopSessionsPolling() {
 function cleanupRealtime() {
   stopChatPolling();
   stopSessionsPolling();
+  teardownTypingChannel();
+  hidePeerTyping();
   if (!supabase) { state.messagesChannel = null; state.sessionChannel = null; return; }
   if (state.messagesChannel) { supabase.removeChannel(state.messagesChannel); state.messagesChannel = null; }
   if (state.sessionChannel)  { supabase.removeChannel(state.sessionChannel);  state.sessionChannel  = null; }
