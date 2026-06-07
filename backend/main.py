@@ -40,11 +40,19 @@ JWT_TTL_SECONDS = int(os.environ.get("JWT_TTL_SECONDS", "604800"))  # 7 days
 if not (SUPABASE_URL and SUPABASE_SERVICE_KEY and SUPABASE_JWT_SECRET):
     print("[warn] SUPABASE_URL / SUPABASE_SERVICE_KEY / SUPABASE_JWT_SECRET not all set — auth + matching will 500.")
 
-admin: Optional[Client] = (
-    create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    if SUPABASE_URL and SUPABASE_SERVICE_KEY
-    else None
-)
+def _build_admin_client() -> Optional[Client]:
+    if not (SUPABASE_URL and SUPABASE_SERVICE_KEY):
+        return None
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+
+# We intentionally do NOT cache a module-level Supabase client. The
+# Supabase Python SDK opens an HTTP/2 connection to PostgREST and reuses
+# it for the lifetime of the process; on Render's free tier the container
+# idles and the upstream silently closes the connection, so the next
+# request fails with `httpcore.RemoteProtocolError: Server disconnected`.
+# Building a fresh client per request gives each call a clean httpx pool,
+# which avoids the stale-connection race entirely. Construction is ~5 ms.
 
 app = FastAPI(title="ALU Matchmaking — Backend")
 
@@ -68,9 +76,10 @@ async def _unhandled_exception_handler(_: Request, exc: Exception):
 
 # ---------- helpers ----------
 def require_admin() -> Client:
-    if admin is None:
+    client = _build_admin_client()
+    if client is None:
         raise HTTPException(status_code=500, detail="Backend not configured.")
-    return admin
+    return client
 
 
 def mint_jwt(user_id: str, email: str) -> str:
