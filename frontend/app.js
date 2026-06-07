@@ -1,13 +1,15 @@
 // NextDate — frontend
 // Custom auth (FastAPI backend) + Supabase Realtime/Postgres for data.
 //
-// Config (SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL) is loaded
-// dynamically from the backend /config endpoint, never hardcoded.
+// Only BACKEND_URL is hardcoded (it's not a secret). SUPABASE_URL and
+// SUPABASE_ANON_KEY are loaded from the backend /config endpoint at
+// startup so they're never committed to source control.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+
+const BACKEND_URL = "https://nextdate-5may.onrender.com";
 
 let SUPABASE_URL = "";
 let SUPABASE_ANON_KEY = "";
-let BACKEND_URL = "";
 
 // ───── DEMO MODE ─────
 // When true, the app runs entirely on hardcoded users / sessions / messages
@@ -719,25 +721,21 @@ function initTheme() {
   document.getElementById("mobile-theme-toggle")?.addEventListener("click", toggle);
 }
 
-// Load config from backend before anything else. Keeps sensitive
-// keys (Supabase anon key) out of the source code entirely.
+// Load Supabase config from the backend before anything else. Only
+// BACKEND_URL is hardcoded above — the Supabase credentials come
+// from the backend's environment variables, never from source code.
 async function loadConfig() {
   try {
-    // Try /config first; if that 404s (old backend), fall back to asking
-    // the user to set the hardcoded values. The endpoint is unauthenticated.
-    const res = await fetch("/config", { method: "GET", mode: "cors" });
+    const res = await fetch(`${BACKEND_URL}/config`, { method: "GET", mode: "cors" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const cfg = await res.json();
     SUPABASE_URL = cfg.supabase_url || "";
     SUPABASE_ANON_KEY = cfg.supabase_anon_key || "";
-    BACKEND_URL = cfg.backend_url || "";
   } catch (e) {
     console.warn("Failed to load /config:", e.message);
-    // If the backend config endpoint is unavailable, check if the user
-    // has set the values in the window object (for local dev).
+    // Fallback for local dev: set these on window before the script runs.
     SUPABASE_URL = window["NEXTDATE_SUPABASE_URL"] || "";
     SUPABASE_ANON_KEY = window["NEXTDATE_SUPABASE_ANON_KEY"] || "";
-    BACKEND_URL = window["NEXTDATE_BACKEND_URL"] || "";
   }
 }
 
