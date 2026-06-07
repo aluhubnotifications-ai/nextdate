@@ -2711,6 +2711,10 @@ async function openSession(sessionId) {
     ?.classList.remove("has-unread");
 
   await loadMessages(sessionId);
+  // Once the messages are visible to me, ack them as read so the peer's
+  // sent (✓) bubbles flip to read (✓✓) on their end via the realtime
+  // UPDATE channel.
+  markPeerMessagesRead(sessionId);
   await refreshRevealState();
   if (!DEMO_MODE) subscribeRealtime(sessionId);
 }
@@ -2792,7 +2796,7 @@ function appendMessage(m) {
         ${renderReplyQuote(m)}
         ${renderBubbleAttachments(m.attachments)}
         ${m.body ? `<span class="bubble-text">${escapeHtml(m.body)}</span>` : ""}
-        ${formatClock(m.created_at) ? `<span class="bubble-time">${escapeHtml(formatClock(m.created_at))}</span>` : ""}
+        ${formatClock(m.created_at) ? `<span class="bubble-time">${escapeHtml(formatClock(m.created_at))}${mine ? renderTicks(m) : ""}</span>` : (mine ? `<span class="bubble-time">${renderTicks(m)}</span>` : "")}
       </div>
       ${renderReactions(m)}
     </div>
@@ -2803,6 +2807,43 @@ function appendMessage(m) {
   body.appendChild(row);
   attachBubbleInteractions(row, m);
   body.scrollTop = body.scrollHeight;
+}
+
+// WhatsApp-style ticks rendered inside the timestamp span of my own
+// bubbles. updateTicks() patches them in place when a realtime UPDATE
+// flips read_at from null → timestamp, so the sender sees their messages
+// turn from sent (✓) to read (✓✓) without a re-render.
+function renderTicks(m) {
+  const read = !!m.read_at;
+  return `<span class="bubble-ticks${read ? " read" : ""}" data-ticks aria-label="${read ? "Read" : "Sent"}">${read ? "✓✓" : "✓"}</span>`;
+}
+function updateTicks(msgId, readAt) {
+  if (!msgId) return;
+  const row = document.querySelector(`.bubble-row[data-msg-id="${CSS.escape(msgId)}"]`);
+  if (!row) return;
+  const ticks = row.querySelector("[data-ticks]");
+  if (!ticks) return;
+  const read = !!readAt;
+  ticks.textContent = read ? "✓✓" : "✓";
+  ticks.classList.toggle("read", read);
+  ticks.setAttribute("aria-label", read ? "Read" : "Sent");
+}
+
+// Mark every message in this session that the peer sent (and that we
+// haven't yet acknowledged) as read. Fires from openSession after the
+// initial load and from the realtime INSERT handler when a new message
+// lands while we're already looking at the chat. Best-effort — failures
+// are silent so a network blip doesn't break the chat UI.
+async function markPeerMessagesRead(sessionId) {
+  if (DEMO_MODE || !supabase || !state.user || !sessionId) return;
+  try {
+    await supabase
+      .from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("session_id", sessionId)
+      .neq("sender_id", state.user.id)
+      .is("read_at", null);
+  } catch (e) { /* noop */ }
 }
 
 function findMessage(sessionId, msgId) {
@@ -3556,6 +3597,27 @@ function subscribeRealtime(sessionId) {
       async (payload) => {
         await decryptMessageInPlace(payload.new);
         appendMessage(payload.new);
+        // Peer just sent something while I'm looking at the chat —
+        // ack it immediately so their bubble flips to ✓✓.
+        if (payload.new?.sender_id && payload.new.sender_id !== state.user?.id) {
+          markPeerMessagesRead(sessionId);
+        }
+      },
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "messages", filter: `session_id=eq.${sessionId}` },
+      (payload) => {
+        // Keep the cached row in sync so a future re-render carries the
+        // read_at forward, then patch the visible bubble in place.
+        const cache = state.sessionMessages?.[sessionId];
+        if (cache) {
+          const i = cache.findIndex((x) => x.id === payload.new.id);
+          if (i >= 0) cache[i] = { ...cache[i], read_at: payload.new.read_at };
+        }
+        if (payload.new?.sender_id === state.user?.id) {
+          updateTicks(payload.new.id, payload.new.read_at);
+        }
       },
     )
     .subscribe();

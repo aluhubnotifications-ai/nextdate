@@ -1018,6 +1018,20 @@ textarea { min-height: 88px; resize: vertical; }
   text-align: right;
   letter-spacing: 0.2px;
 }
+.bubble-ticks {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: -1px;
+  font-weight: 700;
+  opacity: 0.85;
+  transition: color 160ms ease;
+}
+.bubble.mine .bubble-ticks { color: rgba(255, 255, 255, 0.85); }
+.bubble.mine .bubble-ticks.read { color: #7DD3FC; opacity: 1; }
+[data-theme="light"] .bubble.mine .bubble-ticks { color: rgba(255, 255, 255, 0.9); }
+[data-theme="light"] .bubble.mine .bubble-ticks.read { color: #38BDF8; }
 @keyframes bubble-in {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
