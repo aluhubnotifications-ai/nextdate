@@ -3,7 +3,7 @@
 // installable PWA. Network-first for everything we own so deploys roll
 // out on the next refresh; the cache is only a fallback for offline.
 
-const VERSION = "nextdate-v3";
+const VERSION = "nextdate-v4";
 const SHELL = [
   "./",
   "./index.html",
@@ -11,6 +11,10 @@ const SHELL = [
   "./styles.css",
   "./manifest.webmanifest",
   "./icon.svg",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./icon-192-maskable.png",
+  "./icon-512-maskable.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -56,8 +60,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "NextDate";
   const options = {
     body: payload.body || "",
-    icon: payload.icon || "./icon.svg",
-    badge: payload.badge || "./icon.svg",
+    icon: payload.icon || "./icon-192.png",
+    badge: payload.badge || "./icon-192.png",
     tag: payload.tag,
     data: payload.data || {},
     vibrate: [60, 30, 60],
