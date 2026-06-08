@@ -2,7 +2,7 @@
   "name": "NextDate — Find Your People",
   "short_name": "NextDate",
   "description": "Anonymous campus dating and friendships. Match first, reveal when you both feel ready.",
-  "start_url": "./index.html",
+  "start_url": "/",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
