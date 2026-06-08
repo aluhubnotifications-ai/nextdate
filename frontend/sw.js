@@ -1,11 +1,10 @@
 // NextDate — service worker
-// Lightweight cache so the app shell loads offline and qualifies as an
-// installable PWA. Stale-while-revalidate for our own shell: cached
-// response is served instantly while a network refresh happens in the
-// background, so reloads paint immediately and new deploys roll out
-// on the *next* visit (which the controllerchange auto-reload covers).
+// Stale-while-revalidate for our own shell so reloads paint instantly.
+// Designed to fail safe: a missing or 404'ing asset during install
+// doesn't poison the cache; the fetch handler always falls back to
+// network so the page can still load even if the cache is empty.
 
-const VERSION = "nextdate-v5";
+const VERSION = "nextdate-v6";
 const SHELL = [
   "./",
   "./index.html",
@@ -20,8 +19,19 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
+  // Pre-cache each shell asset INDIVIDUALLY so a single 404 (e.g. a
+  // newly-added icon that hasn't propagated to the CDN yet) doesn't
+  // make addAll throw and leave the entire cache empty. Anything that
+  // fails here will just be cached on its first runtime fetch.
   event.waitUntil(
-    caches.open(VERSION).then((cache) => cache.addAll(SHELL)).catch(() => {})
+    caches.open(VERSION).then(async (cache) => {
+      await Promise.all(SHELL.map(async (url) => {
+        try {
+          const resp = await fetch(url, { cache: "reload" });
+          if (resp && resp.ok) await cache.put(url, resp);
+        } catch { /* asset will be cached on first runtime fetch */ }
+      }));
+    }).catch(() => {})
   );
   self.skipWaiting();
 });
@@ -36,10 +46,6 @@ self.addEventListener("activate", (event) => {
 });
 
 // ── Notifications ──
-// Clicking a system notification focuses an existing app tab (and tells
-// it which view to open) or pops one open if none exist. The `push`
-// handler is wired up too so that, once the backend learns to send
-// VAPID-signed Web Push messages, no frontend change is needed.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data || {};
@@ -76,37 +82,46 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  // Only handle our own origin; let Supabase, fonts, esm.sh hit the network.
   if (url.origin !== self.location.origin) return;
 
   if (req.mode === "navigate") {
-    // Same SWR strategy for the navigation request itself — cached HTML
-    // shell paints in the browser instantly, and the network response
-    // refreshes the cache for the *next* load (controllerchange handles
-    // the actual reload after deploys).
     event.respondWith(staleWhileRevalidate(req, "./index.html"));
     return;
   }
-
   event.respondWith(staleWhileRevalidate(req));
 });
 
-// Stale-while-revalidate: serve the cached response immediately if we
-// have one, while kicking off a network fetch in the background to
-// refresh the cache. If there's no cache hit, fall through to the
-// network. This makes reloads paint *instantly* instead of waiting on
-// a network round trip for every shell asset.
+// Stale-while-revalidate. Serve the cached response immediately if we
+// have one, while kicking off a background fetch to refresh the cache.
+// Critically: this function NEVER resolves to undefined. If both the
+// cache and the network fail, we return a synthetic offline response
+// so the browser doesn't get back nothing (which on iOS Safari shows
+// as a permanent blank page until the user clears site data).
 function staleWhileRevalidate(req, fallback) {
-  return caches.match(req).then((cached) => {
-    const networkFetch = fetch(req)
-      .then((resp) => {
-        if (resp && resp.ok) {
-          const copy = resp.clone();
-          caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return resp;
-      })
-      .catch(() => cached || (fallback ? caches.match(fallback) : undefined));
-    return cached || networkFetch;
-  });
+  return caches.open(VERSION).then((cache) =>
+    cache.match(req).then((cached) => {
+      const networkFetch = fetch(req)
+        .then((resp) => {
+          if (resp && resp.ok) {
+            try { cache.put(req, resp.clone()); } catch { /* noop */ }
+          }
+          return resp;
+        })
+        .catch(async () => {
+          // Network errored. Try the cache, then the navigation fallback.
+          if (cached) return cached;
+          if (fallback) {
+            const fb = await cache.match(fallback);
+            if (fb) return fb;
+          }
+          // Last resort — never return undefined; respond with a 503 so
+          // the browser shows its own offline UI instead of just hanging.
+          return new Response(
+            "Offline — pull down to refresh once you have a connection.",
+            { status: 503, statusText: "Offline", headers: { "Content-Type": "text/plain" } }
+          );
+        });
+      return cached || networkFetch;
+    })
+  );
 }
