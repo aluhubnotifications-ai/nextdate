@@ -4599,6 +4599,19 @@ function isActiveOrRecent(peerId) {
   const mOk    = document.getElementById("install-modal-ok");
   if (!btn || !modal) return;
 
+  // iOS has no programmatic install API — Apple makes the user go
+  // through Share → "Add to Home Screen" themselves. Relabel the
+  // button up front so iPhone users don't expect a one-tap install
+  // and think the modal is a bug.
+  const _ua = navigator.userAgent || "";
+  const _isIOS = /iPhone|iPad|iPod/i.test(_ua) ||
+    (_ua.includes("Mac") && "ontouchend" in document);
+  if (_isIOS) {
+    const lbl = btn.querySelector("span");
+    if (lbl) lbl.textContent = "Add to Home";
+    btn.setAttribute("aria-label", "Add NextDate to your Home Screen");
+  }
+
   // Already installed — don't nag.
   const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches ||
@@ -4617,10 +4630,22 @@ function isActiveOrRecent(peerId) {
     const isAndroid = /Android/i.test(ua);
     const platform = isIOS ? "ios" : isAndroid ? "android" : "desktop";
     modal.querySelectorAll(".install-howto").forEach((el) => {
-      el.style.order = el.dataset.platform === platform ? "0" : "1";
-      el.style.borderColor =
-        el.dataset.platform === platform ? "var(--border-hi)" : "";
+      const match = el.dataset.platform === platform;
+      el.style.order = match ? "0" : "1";
+      el.style.borderColor = match ? "var(--border-hi)" : "";
+      // Hide non-matching platforms entirely on iOS so the user isn't
+      // distracted by Android/desktop steps that don't apply.
+      el.style.display = isIOS && !match ? "none" : "";
     });
+    // Set expectations honestly on iOS — Apple doesn't permit a one-tap
+    // install, so framing it as a 10-second manual step keeps users
+    // from thinking the modal is a bug.
+    const intro = modal.querySelector(".install-intro");
+    if (intro) {
+      intro.textContent = isIOS
+        ? "iPhone needs a quick 3-step setup to add NextDate to your Home Screen. Once added, it opens like a real app — full screen, no browser bar."
+        : "Add NextDate to your home screen so it opens like a real app — full screen, no browser bar, works even with a flaky connection.";
+    }
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
   }
