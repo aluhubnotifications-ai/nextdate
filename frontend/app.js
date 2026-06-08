@@ -724,19 +724,64 @@ function initTheme() {
 // Load Supabase config from the backend before anything else. Only
 // BACKEND_URL is hardcoded above — the Supabase credentials come
 // from the backend's environment variables, never from source code.
+//
+// We cache the response in localStorage so subsequent loads boot
+// instantly (no Render round-trip blocking page render). A background
+// fetch refreshes the cache for next time. The Supabase anon key is
+// safe to put in localStorage — it's already a public client key.
+const CONFIG_CACHE_KEY = "nd_config_v1";
 async function loadConfig() {
+  // Fast path: hydrate from cache so buildSupabase() can run instantly.
+  try {
+    const raw = localStorage.getItem(CONFIG_CACHE_KEY);
+    if (raw) {
+      const cached = JSON.parse(raw);
+      if (cached?.supabase_url && cached?.supabase_anon_key) {
+        SUPABASE_URL = cached.supabase_url;
+        SUPABASE_ANON_KEY = cached.supabase_anon_key;
+        // Refresh the cache in the background — don't await; if Render
+        // is slow or cold, we don't block boot for it.
+        refreshConfigInBackground();
+        return;
+      }
+    }
+  } catch { /* corrupted cache, fall through */ }
+
+  // Slow path: first ever visit (or cache cleared). Block on the
+  // network call because we need the URL and anon key to construct the
+  // Supabase client.
   try {
     const res = await fetch(`${BACKEND_URL}/config`, { method: "GET", mode: "cors" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const cfg = await res.json();
     SUPABASE_URL = cfg.supabase_url || "";
     SUPABASE_ANON_KEY = cfg.supabase_anon_key || "";
+    try {
+      localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({
+        supabase_url: SUPABASE_URL,
+        supabase_anon_key: SUPABASE_ANON_KEY,
+      }));
+    } catch { /* storage full / private mode — non-fatal */ }
   } catch (e) {
     console.warn("Failed to load /config:", e.message);
-    // Fallback for local dev: set these on window before the script runs.
     SUPABASE_URL = window["NEXTDATE_SUPABASE_URL"] || "";
     SUPABASE_ANON_KEY = window["NEXTDATE_SUPABASE_ANON_KEY"] || "";
   }
+}
+
+function refreshConfigInBackground() {
+  fetch(`${BACKEND_URL}/config`, { method: "GET", mode: "cors" })
+    .then((r) => r.ok ? r.json() : null)
+    .then((cfg) => {
+      if (!cfg?.supabase_url || !cfg?.supabase_anon_key) return;
+      // Only write if something actually changed — avoids a redundant
+      // localStorage write on every page load.
+      const next = { supabase_url: cfg.supabase_url, supabase_anon_key: cfg.supabase_anon_key };
+      const prev = localStorage.getItem(CONFIG_CACHE_KEY);
+      if (prev === JSON.stringify(next)) return;
+      try { localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(next)); } catch {}
+    })
+    .catch(() => { /* silent — cached values still valid */ });
 }
 
 // ---------- init ----------

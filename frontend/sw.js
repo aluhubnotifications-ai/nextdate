@@ -1,9 +1,11 @@
 // NextDate — service worker
 // Lightweight cache so the app shell loads offline and qualifies as an
-// installable PWA. Network-first for everything we own so deploys roll
-// out on the next refresh; the cache is only a fallback for offline.
+// installable PWA. Stale-while-revalidate for our own shell: cached
+// response is served instantly while a network refresh happens in the
+// background, so reloads paint immediately and new deploys roll out
+// on the *next* visit (which the controllerchange auto-reload covers).
 
-const VERSION = "nextdate-v4";
+const VERSION = "nextdate-v5";
 const SHELL = [
   "./",
   "./index.html",
@@ -78,19 +80,25 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req).catch(() =>
-        caches.match("./index.html").then((r) => r || caches.match(req))
-      )
-    );
+    // Same SWR strategy for the navigation request itself — cached HTML
+    // shell paints in the browser instantly, and the network response
+    // refreshes the cache for the *next* load (controllerchange handles
+    // the actual reload after deploys).
+    event.respondWith(staleWhileRevalidate(req, "./index.html"));
     return;
   }
 
-  // Network-first for our shell assets. We always try the live response
-  // so style/JS deploys take effect on the next refresh; the cache is
-  // only consulted when the network actually fails (offline).
-  event.respondWith(
-    fetch(req)
+  event.respondWith(staleWhileRevalidate(req));
+});
+
+// Stale-while-revalidate: serve the cached response immediately if we
+// have one, while kicking off a network fetch in the background to
+// refresh the cache. If there's no cache hit, fall through to the
+// network. This makes reloads paint *instantly* instead of waiting on
+// a network round trip for every shell asset.
+function staleWhileRevalidate(req, fallback) {
+  return caches.match(req).then((cached) => {
+    const networkFetch = fetch(req)
       .then((resp) => {
         if (resp && resp.ok) {
           const copy = resp.clone();
@@ -98,6 +106,7 @@ self.addEventListener("fetch", (event) => {
         }
         return resp;
       })
-      .catch(() => caches.match(req))
-  );
-});
+      .catch(() => cached || (fallback ? caches.match(fallback) : undefined));
+    return cached || networkFetch;
+  });
+}
