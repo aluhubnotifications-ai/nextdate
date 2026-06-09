@@ -363,6 +363,45 @@ const actionToast = ({ msg, actionLabel = "Undo", ms = 5000 }) => {
   });
 };
 
+// ---------- splash screen ----------
+let _splashPct    = 0;
+let _splashCreepT = null;
+
+function splashSet(pct) {
+  _splashPct = Math.min(100, Math.round(pct));
+  const fill = document.getElementById("nd-splash-fill");
+  const lbl  = document.getElementById("nd-splash-pct");
+  if (fill) fill.style.width = `${_splashPct}%`;
+  if (lbl)  lbl.textContent  = `${_splashPct}%`;
+}
+
+// Slowly creep toward `cap` while waiting on a long async step so the
+// bar never appears frozen.
+function splashCreep(cap, step = 0.6, interval = 120) {
+  clearTimeout(_splashCreepT);
+  if (_splashPct >= cap) return;
+  _splashPct = Math.min(cap, _splashPct + step);
+  const fill = document.getElementById("nd-splash-fill");
+  const lbl  = document.getElementById("nd-splash-pct");
+  if (fill) fill.style.width = `${_splashPct}%`;
+  if (lbl)  lbl.textContent  = `${Math.round(_splashPct)}%`;
+  _splashCreepT = setTimeout(() => splashCreep(cap, step, interval), interval);
+}
+
+function splashHide() {
+  clearTimeout(_splashCreepT);
+  splashSet(100);
+  // Let the 100% paint render for one frame, then fade out.
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      const el = document.getElementById("nd-splash");
+      if (!el) return;
+      el.classList.add("nd-splash-out");
+      setTimeout(() => el.remove(), 480);
+    }, 350);
+  });
+}
+
 // ---------- loading affordances ----------
 // Top progress bar (Facebook/YouTube/GitHub style). Stacks calls so
 // nested loads don't blink — we only hide once everything wraps up.
@@ -790,7 +829,9 @@ function refreshConfigInBackground() {
   const _ref = new URLSearchParams(window.location.search).get("ref");
   if (_ref) sessionStorage.setItem("nd_ref", _ref);
 
+  splashSet(5);
   await loadConfig();
+  splashSet(15);
   initTheme();
   wireGlobalModals();
   prewarmBackend();
@@ -802,10 +843,12 @@ function refreshConfigInBackground() {
     state.privateIdentity = DEMO_ME.private;
     setNavVisible(true);
     subscribePresence();
+    splashHide();
     return navigate("discover");
   }
 
   if (SUPABASE_URL.includes("YOUR-PROJECT") || SUPABASE_ANON_KEY.includes("YOUR-")) {
+    splashHide();
     $("#view-root").innerHTML = `
       <section class="center-wrap"><div class="card auth-card">
         <h1>Setup needed</h1>
@@ -818,56 +861,67 @@ function refreshConfigInBackground() {
 
   // Password-reset link — show reset pane regardless of session state.
   if (new URLSearchParams(window.location.search).get("token")) {
+    splashHide();
     setNavVisible(false);
     return navigate("auth");
   }
 
   const initialToken = tokens.get();
   if (!initialToken) {
+    splashHide();
     setNavVisible(false);
     return navigate("auth");
   }
 
+  splashSet(20);
   buildSupabase(initialToken);
 
-  // ── Facebook-style instant shell ────────────────────────────────────────
-  // If we have a cached user from a previous session, paint the nav and
-  // the discover skeleton *immediately* — before any network call finishes.
-  // Token validation and data hydration then happen in the background so
-  // the user sees content within a frame of the page loading rather than
-  // staring at a blank screen for 1-10 seconds.
+  // Cached user path — token + profile still need validation but we
+  // already know roughly who the user is.
   const cached = cachedUser.get();
-  if (cached?.id) {
-    state.user = cached;
-    setNavVisible(true);
-    navigate("discover");           // renders skeleton cards right away
-    try {
-      const me = await api("/auth/me");
-      state.user = { id: me.id, email: me.email };
-      cachedUser.set(state.user);
-      await hydrateSession(state.user);
-    } catch (err) {
-      console.warn("Session invalid:", err.message);
-      clearSession();
-      setNavVisible(false);
-      navigate("auth");
-    }
-    return;
-  }
+  splashCreep(55);   // bar creeps toward 55% while /auth/me resolves
 
-  // No cached user (first page-load after a fresh login) — show nothing
-  // until validation completes, then navigate normally.
-  progressStart();
   try {
     const me = await api("/auth/me");
-    await onSignedIn({ id: me.id, email: me.email });
+    splashSet(55);
+    state.user = { id: me.id, email: me.email };
+    cachedUser.set(state.user);
+    if (!supabase) buildSupabase(initialToken);
+
+    splashCreep(85);  // creep toward 85% while profile data loads
+    const [profileRes, prefsRes, privRes] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", me.id).maybeSingle(),
+      supabase.from("match_preferences").select("*").eq("user_id", me.id).maybeSingle(),
+      supabase.from("private_identities").select("*").eq("user_id", me.id).maybeSingle(),
+    ]);
+    state.profile = profileRes.data;
+    state.prefs = prefsRes.data;
+    state.privateIdentity = privRes.data;
+    splashSet(85);
+    setNavVisible(true);
+
+    splashCreep(98);  // creep while notifications + subscriptions set up
+    if (!state.profile || !state.prefs) {
+      splashHide();
+      return navigate("onboarding");
+    }
+    await loadBlockedUsers();
+    await loadNotifications();
+    subscribeNotifications();
+    subscribeGlobalMessages();
+    subscribeDeckInvalidation();
+    subscribePresence();
+    startHeartbeat();
+
+    splashHide();     // hits 100% → fade out → reveal everything at once
+    navigate("discover");
+    try { window.maybePromptForNotifications?.(); } catch {}
   } catch (err) {
     console.warn("Session invalid:", err.message);
     clearSession();
+    splashHide();
     setNavVisible(false);
     navigate("auth");
-  } finally {
-    progressEnd();
   }
 })();
 
