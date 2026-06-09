@@ -1288,10 +1288,15 @@ function renderAuth(root) {
     const btn = $("#btn-forgot");
     buttonLoading(btn, true);
     progressStart();
+    console.log("[forgot-password] requesting reset for:", email);
     try {
-      await api("/auth/forgot-password", { method: "POST", body: { email }, auth: false });
+      const res = await api("/auth/forgot-password", { method: "POST", body: { email }, auth: false });
+      console.log("[forgot-password] response:", res);
       showPane("forgot-sent");
-    } catch (err) { toast(err.message); }
+    } catch (err) {
+      console.error("[forgot-password] error:", err);
+      toast(err.message);
+    }
     finally { buttonLoading(btn, false); progressEnd(); }
   };
 
@@ -1302,12 +1307,17 @@ function renderAuth(root) {
     const btn = $("#btn-reset");
     buttonLoading(btn, true);
     progressStart();
+    console.log("[reset-password] submitting reset, token:", resetToken);
     try {
-      await api("/auth/reset-password", { method: "POST", body: { token: resetToken, password }, auth: false });
+      const res = await api("/auth/reset-password", { method: "POST", body: { token: resetToken, password }, auth: false });
+      console.log("[reset-password] response:", res);
       history.replaceState({}, "", "/");
       toast("Password updated — sign in with your new password.");
       showPane("login");
-    } catch (err) { toast(err.message); }
+    } catch (err) {
+      console.error("[reset-password] error:", err);
+      toast(err.message);
+    }
     finally { buttonLoading(btn, false); progressEnd(); }
   };
 }
