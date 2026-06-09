@@ -342,6 +342,9 @@
           <button id="btn-login" class="btn full" type="button">Sign in</button>
 
           <p class="auth-switch muted">
+            <button type="button" class="link" data-go="forgot">Forgot password?</button>
+          </p>
+          <p class="auth-switch muted">
             New here? <button type="button" class="link" data-go="signup">Create an account</button>
           </p>
         </div>
@@ -370,6 +373,38 @@
             Already have one? <button type="button" class="link" data-go="login">Sign in</button>
           </p>
         </div>
+
+        <div class="auth-pane hidden" data-pane="forgot">
+          <h1>Reset password</h1>
+          <p class="muted">Enter your email and we'll send you a reset link.</p>
+          <div class="field">
+            <label>Email</label>
+            <input id="email_forgot" type="email" autocomplete="email" placeholder="you@example.com" />
+          </div>
+          <button id="btn-forgot" class="btn full" type="button">Send reset link</button>
+          <p class="auth-switch muted">
+            <button type="button" class="link" data-go="login">Back to sign in</button>
+          </p>
+        </div>
+
+        <div class="auth-pane hidden" data-pane="forgot-sent">
+          <h1>Check your email</h1>
+          <p class="muted">If that email is registered, you'll receive a reset link shortly. Check your spam folder too.</p>
+          <p class="auth-switch muted">
+            <button type="button" class="link" data-go="login">Back to sign in</button>
+          </p>
+        </div>
+
+        <div class="auth-pane hidden" data-pane="reset">
+          <h1>Set new password</h1>
+          <p class="muted">Enter a new password for your account.</p>
+          <div class="field">
+            <label>New password <span class="muted" style="font-weight:400;">— at least 6 characters</span></label>
+            <input id="password_reset" type="password" autocomplete="new-password" placeholder="••••••••" />
+          </div>
+          <button id="btn-reset" class="btn full" type="button">Update password</button>
+        </div>
+
       </div>
     </section>
   </template>

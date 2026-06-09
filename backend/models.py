@@ -101,6 +101,15 @@ class LoginBody(BaseModel):
     password: str
 
 
+class ForgotPasswordBody(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordBody(BaseModel):
+    token: str
+    password: str = Field(min_length=6, max_length=128)
+
+
 class AuthResponse(BaseModel):
     user_id: str
     email: EmailStr

@@ -11,10 +11,15 @@ All row shapes live in models.py — this file only wires routes.
 import math
 import os
 import re
+import secrets
+import smtplib
+import ssl
 import time
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import List, Optional
 
 import bcrypt
@@ -26,8 +31,10 @@ from supabase import Client, create_client
 
 from models import (
     AuthResponse,
+    ForgotPasswordBody,
     LoginBody,
     Profile,
+    ResetPasswordBody,
     SignupBody,
     SuggestionResponse,
 )
@@ -42,6 +49,54 @@ if not (SUPABASE_URL and SUPABASE_SERVICE_KEY and SUPABASE_JWT_SECRET):
     print("[warn] SUPABASE_URL / SUPABASE_SERVICE_KEY / SUPABASE_JWT_SECRET not all set — auth + matching will 500.")
 if not SUPABASE_ANON_KEY:
     print("[warn] SUPABASE_ANON_KEY not set — frontend config endpoint will fail.")
+
+SMTP_HOST     = os.environ.get("SMTP_HOST", "")
+SMTP_PORT     = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER     = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM     = os.environ.get("SMTP_FROM", "") or SMTP_USER
+APP_URL       = os.environ.get("APP_URL", "https://nextdate.pages.dev")
+
+RESET_TOKEN_TTL_SECONDS = 3600  # 1 hour
+
+
+def send_reset_email(to_email: str, token: str) -> None:
+    if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
+        print(f"[warn] SMTP not configured — skipping reset email to {to_email}. Token: {token}")
+        return
+
+    reset_url = f"{APP_URL}?token={token}"
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Reset your NextDate password"
+    msg["From"]    = SMTP_FROM
+    msg["To"]      = to_email
+
+    text = (
+        f"Hi,\n\nReset your NextDate password here: {reset_url}\n\n"
+        "This link expires in 1 hour. If you didn't request this, ignore this email."
+    )
+    html = f"""
+<p>Hi,</p>
+<p>You requested a password reset for your NextDate account.</p>
+<p>
+  <a href="{reset_url}"
+     style="background:#FF3D6E;color:#fff;padding:12px 24px;border-radius:8px;
+            text-decoration:none;font-weight:600;display:inline-block;">
+    Reset password
+  </a>
+</p>
+<p style="word-break:break-all;">Or copy this link: {reset_url}</p>
+<p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
+"""
+    msg.attach(MIMEText(text, "plain"))
+    msg.attach(MIMEText(html, "html"))
+
+    ctx = ssl.create_default_context()
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server.starttls(context=ctx)
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.sendmail(SMTP_FROM, to_email, msg.as_string())
 
 def _build_admin_client() -> Optional[Client]:
     if not (SUPABASE_URL and SUPABASE_SERVICE_KEY):
@@ -198,6 +253,54 @@ def delete_me(uid: str = Depends(caller_id), db: Client = Depends(require_admin)
     chat_sessions, messages, notifications, …) so a single delete
     here wipes the user from the entire app."""
     db.table("users").delete().eq("id", uid).execute()
+    return {"ok": True}
+
+
+@app.post("/auth/forgot-password")
+def forgot_password(body: ForgotPasswordBody, db: Client = Depends(require_admin)):
+    email = body.email.lower()
+    rows = db.table("users").select("id").eq("email", email).limit(1).execute()
+
+    # Always return 200 — never reveal whether an email is registered.
+    if not rows.data:
+        return {"ok": True}
+
+    user_id = rows.data[0]["id"]
+    token = secrets.token_urlsafe(32)
+    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=RESET_TOKEN_TTL_SECONDS)).isoformat()
+
+    db.table("password_reset_tokens").insert({
+        "token": token,
+        "user_id": user_id,
+        "expires_at": expires_at,
+    }).execute()
+
+    try:
+        send_reset_email(email, token)
+    except Exception as exc:
+        print(f"[error] Reset email failed for {email}: {exc}")
+
+    return {"ok": True}
+
+
+@app.post("/auth/reset-password")
+def reset_password(body: ResetPasswordBody, db: Client = Depends(require_admin)):
+    rows = db.table("password_reset_tokens").select("*").eq("token", body.token).limit(1).execute()
+    if not rows.data:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+
+    record = rows.data[0]
+    expires_at_str = record["expires_at"]
+    # Supabase returns timestamps with "+00:00" or "Z" suffix.
+    if expires_at_str.endswith("Z"):
+        expires_at_str = expires_at_str[:-1] + "+00:00"
+    expires_at = datetime.fromisoformat(expires_at_str)
+    if datetime.now(timezone.utc) > expires_at:
+        db.table("password_reset_tokens").delete().eq("token", body.token).execute()
+        raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
+
+    db.table("users").update({"password_hash": hash_password(body.password)}).eq("id", record["user_id"]).execute()
+    db.table("password_reset_tokens").delete().eq("token", body.token).execute()
     return {"ok": True}
 
 

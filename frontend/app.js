@@ -812,6 +812,13 @@ function refreshConfigInBackground() {
     return;
   }
 
+  // If the URL carries a password-reset token, show the reset pane regardless
+  // of whether the user is currently signed in.
+  if (new URLSearchParams(window.location.search).get("token")) {
+    setNavVisible(false);
+    return navigate("auth");
+  }
+
   const initialToken = tokens.get();
   if (!initialToken) {
     // Defer client construction until sign-in so we don't spawn an
@@ -1213,18 +1220,25 @@ function renderAuth(root) {
   // Tabs: Sign in / Create account. Each has its own pane so email +
   // password autofill don't collide between the two flows and so the
   // visual context (heading, button label, copy) reads correctly.
+  const TAB_PANES = ["login", "signup"];
+  const FOCUS_MAP = { login: "#email_login", signup: "#email_signup", forgot: "#email_forgot" };
+
   const showPane = (which) => {
     $$(".auth-tab").forEach((t) => {
-      const on = t.dataset.pane === which;
+      const on = TAB_PANES.includes(which) && t.dataset.pane === which;
       t.classList.toggle("active", on);
       t.setAttribute("aria-selected", String(on));
     });
     $$(".auth-pane").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== which));
-    const focusEl = which === "login" ? $("#email_login") : $("#email_signup");
-    setTimeout(() => focusEl?.focus(), 0);
+    const focusSel = FOCUS_MAP[which];
+    if (focusSel) setTimeout(() => $(focusSel)?.focus(), 0);
   };
   $$(".auth-tab").forEach((t) => t.addEventListener("click", () => showPane(t.dataset.pane)));
   $$("[data-go]").forEach((b) => b.addEventListener("click", () => showPane(b.dataset.go)));
+
+  // If a password-reset token arrived in the URL, go straight to the reset pane.
+  const resetToken = new URLSearchParams(window.location.search).get("token");
+  if (resetToken) showPane("reset");
 
   $("#btn-login").onclick = async () => {
     const email = $("#email_login").value.trim();
@@ -1266,6 +1280,35 @@ function renderAuth(root) {
       await onSignedIn({ id: res.user_id, email: res.email });
     } catch (err) { toast(err.message); }
     finally { buttonLoading(signupBtn, false); progressEnd(); }
+  };
+
+  $("#btn-forgot").onclick = async () => {
+    const email = $("#email_forgot").value.trim();
+    if (!email) return toast("Enter your email address.");
+    const btn = $("#btn-forgot");
+    buttonLoading(btn, true);
+    progressStart();
+    try {
+      await api("/auth/forgot-password", { method: "POST", body: { email }, auth: false });
+      showPane("forgot-sent");
+    } catch (err) { toast(err.message); }
+    finally { buttonLoading(btn, false); progressEnd(); }
+  };
+
+  $("#btn-reset").onclick = async () => {
+    const password = $("#password_reset").value;
+    if (!password) return toast("Enter a new password.");
+    if (password.length < 6) return toast("Password must be at least 6 characters.");
+    const btn = $("#btn-reset");
+    buttonLoading(btn, true);
+    progressStart();
+    try {
+      await api("/auth/reset-password", { method: "POST", body: { token: resetToken, password }, auth: false });
+      history.replaceState({}, "", "/");
+      toast("Password updated — sign in with your new password.");
+      showPane("login");
+    } catch (err) { toast(err.message); }
+    finally { buttonLoading(btn, false); progressEnd(); }
   };
 }
 
