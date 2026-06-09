@@ -153,6 +153,7 @@ function paintUsers(filter = "") {
   const visible = !q ? allUsers : allUsers.filter((u) => {
     const hay = [
       u.nickname, u.email, u.private?.real_name, u.private?.country, u.private?.cohort,
+      u.ref_campaign,
       ...(u.prefs?.interests || []), ...(u.prefs?.hobbies || []),
     ].filter(Boolean).join(" ").toLowerCase();
     return hay.includes(q);
@@ -165,26 +166,38 @@ function paintUsers(filter = "") {
       ...(prefs.interests || []).slice(0, 4),
       ...(prefs.hobbies || []).slice(0, 3),
     ].map((t) => `<span class="admin-tag">${escapeHtml(t)}</span>`).join("");
-    const adminPill = u.is_admin ? `<span class="admin-pill">ADMIN</span>` : "";
+
+    const adminPill    = u.is_admin    ? `<span class="admin-pill">ADMIN</span>` : "";
+    const incompletePill = !u.has_profile ? `<span class="admin-pill incomplete">NO PROFILE</span>` : "";
+    const refPill      = u.ref_campaign ? `<span class="admin-pill ref">via ${escapeHtml(u.ref_campaign)}</span>` : "";
+
+    // Show first letter of email as avatar fallback when no emoji set
+    const avatarContent = u.avatar_url
+      ? escapeHtml(u.avatar_url)
+      : `<span class="admin-avatar-init">${escapeHtml((u.nickname || u.email || "?")[0].toUpperCase())}</span>`;
+
     const card = document.createElement("div");
     card.className = "admin-user-card";
     card.innerHTML = `
       <div class="admin-user-head">
-        <div class="admin-avatar">${escapeHtml(u.avatar_url || "🦊")}</div>
+        <div class="admin-avatar">${avatarContent}</div>
         <div class="admin-user-meta">
-          <div class="admin-user-name">${escapeHtml(u.nickname || "—")} ${adminPill}</div>
-          <div class="admin-user-sub">${escapeHtml(u.email || "—")} · ${escapeHtml(u.gender || "—")} · ${escapeHtml(u.zodiac_sign || "—")}</div>
+          <div class="admin-user-name">${escapeHtml(u.nickname || u.email.split("@")[0])} ${adminPill}${incompletePill}${refPill}</div>
+          <div class="admin-user-sub">${escapeHtml(u.email)} · ${escapeHtml(u.gender || "—")} · ${escapeHtml(u.zodiac_sign || "—")}</div>
         </div>
         <div class="admin-user-actions">
-          <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Admin accounts can't be deleted from here — remove their email from the allowlist first.\"" : ""}>Delete</button>
+          <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Remove from admin allowlist first\"" : ""}>Delete</button>
         </div>
       </div>
       <div class="admin-user-body">
-        <div class="admin-row"><span class="admin-label">Real name</span><span>${escapeHtml(priv.real_name || "—")}</span></div>
-        <div class="admin-row"><span class="admin-label">Age</span><span>${escapeHtml(String(priv.age || "—"))}</span></div>
-        <div class="admin-row"><span class="admin-label">Country</span><span>${escapeHtml(priv.country || "—")}</span></div>
-        <div class="admin-row"><span class="admin-label">Cohort</span><span>${escapeHtml(priv.cohort || "—")}</span></div>
-        <div class="admin-row"><span class="admin-label">Looking for</span><span>${escapeHtml(prefs.target_intent || "—")} · ${escapeHtml(prefs.term_length || "—")}</span></div>
+        <div class="admin-info-grid">
+          <div class="admin-row"><span class="admin-label">Real name</span><span>${escapeHtml(priv.real_name || "—")}</span></div>
+          <div class="admin-row"><span class="admin-label">Age</span><span>${escapeHtml(String(priv.age || "—"))}</span></div>
+          <div class="admin-row"><span class="admin-label">Country</span><span>${escapeHtml(priv.country || "—")}</span></div>
+          <div class="admin-row"><span class="admin-label">Cohort</span><span>${escapeHtml(priv.cohort || "—")}</span></div>
+          <div class="admin-row"><span class="admin-label">Looking for</span><span>${escapeHtml(prefs.target_intent || "—")} · ${escapeHtml(prefs.term_length || "—")}</span></div>
+          <div class="admin-row"><span class="admin-label">Joined</span><span>${escapeHtml(fmtRelative(u.created_at))}</span></div>
+        </div>
         ${tagBits ? `<div class="admin-tags">${tagBits}</div>` : ""}
       </div>`;
     list.appendChild(card);
@@ -192,6 +205,20 @@ function paintUsers(filter = "") {
   if (!visible.length) {
     list.innerHTML = `<div class="admin-empty">No users match.</div>`;
   }
+}
+
+let allReportsAll = [];   // unfiltered — used only for stats
+
+function updateStats() {
+  const total    = allUsers.length;
+  const withProf = allUsers.filter((u) => u.has_profile).length;
+  const admins   = allUsers.filter((u) => u.is_admin).length;
+  const openRep  = allReportsAll.filter((r) => r.status === "open").length;
+  const s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  s("stat-total",      total);
+  s("stat-profiles",   withProf);
+  s("stat-open",       openRep);
+  s("stat-admins-val", admins);
 }
 
 function paintReports(rows) {
@@ -232,6 +259,7 @@ async function loadUsers() {
     allUsers = await api("/admin/users");
     $("#admin-users-count").textContent = allUsers.length;
     paintUsers($("#admin-user-search").value || "");
+    updateStats();
   } catch (err) {
     toast(err.message);
     $("#admin-users-list").innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
@@ -283,6 +311,9 @@ async function loadEmails() {
 }
 
 async function renderDashboard() {
+  // Pre-fetch all reports (unfiltered) so the stats bar always shows
+  // accurate open-report count regardless of the filter selection.
+  try { allReportsAll = await api("/admin/reports"); } catch { allReportsAll = []; }
   await Promise.all([loadUsers(), loadReports(), loadEmails()]);
 }
 
@@ -293,6 +324,13 @@ function wire() {
     if (e.key === "Enter") doSignin();
   });
   $("#admin-signout").addEventListener("click", doSignout);
+  $("#admin-refresh").addEventListener("click", async () => {
+    const btn = $("#admin-refresh");
+    btn.disabled = true;
+    await renderDashboard();
+    btn.disabled = false;
+    toast("Refreshed.");
+  });
 
   $$(".admin-tab").forEach((t) => t.addEventListener("click", () => {
     const which = t.dataset.tab;

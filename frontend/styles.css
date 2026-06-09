@@ -3851,11 +3851,50 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
 /* ===== Admin dashboard ===== */
 .admin-shell {
   padding: 20px 22px 80px;
-  max-width: 980px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 .admin-head h1 { margin: 0 0 4px; }
-.admin-head p { margin: 0 0 18px; }
+.admin-head p { margin: 0; }
+.admin-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+/* ── Stats bar ─────────────────────────────────────────────── */
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.admin-stat {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 14px 18px;
+  text-align: center;
+}
+.admin-stat-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.admin-stat-label {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+@media (max-width: 640px) {
+  .admin-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
 .admin-tabs {
   display: flex;
   gap: 6px;
@@ -3905,14 +3944,22 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   font-size: 14px;
 }
 .admin-filter { flex: 0 0 auto; min-width: 140px; }
+
+/* Users pane uses a two-column grid; reports/admins stay single-column */
+#admin-users-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 12px;
+}
 .admin-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 .admin-empty {
+  grid-column: 1 / -1;
   text-align: center;
-  padding: 32px 12px;
+  padding: 40px 12px;
   color: var(--text-dim);
   background: var(--bg-elevated);
   border-radius: 12px;
@@ -3924,29 +3971,42 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   border-radius: 14px;
   padding: 14px 16px;
 }
+.admin-user-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
 .admin-user-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
 }
 .admin-avatar {
-  width: 44px; height: 44px;
+  width: 46px; height: 46px;
   border-radius: 50%;
   background: var(--bg);
+  border: 1px solid var(--border-soft);
   display: flex; align-items: center; justify-content: center;
   font-size: 22px;
   flex: 0 0 auto;
+  overflow: hidden;
+}
+.admin-avatar-init {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-dim);
 }
 .admin-user-meta { flex: 1 1 auto; min-width: 0; }
 .admin-user-name {
   font-weight: 700;
-  font-size: 15px;
-  display: flex; align-items: center; gap: 8px;
+  font-size: 14px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  line-height: 1.3;
 }
 .admin-user-sub {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-dim);
-  margin-top: 2px;
+  margin-top: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3954,11 +4014,20 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
 .admin-pill {
   background: var(--brand-grad, linear-gradient(90deg,#ff3d6e,#ff8a3d));
   color: #fff;
-  font-size: 10px;
+  font-size: 9.5px;
   letter-spacing: .04em;
   padding: 2px 7px;
   border-radius: 999px;
   font-weight: 700;
+  white-space: nowrap;
+}
+.admin-pill.incomplete {
+  background: #3a3a3a;
+  color: var(--text-dim);
+}
+.admin-pill.ref {
+  background: #1e3a5f;
+  color: #6db3f5;
 }
 .btn.small {
   padding: 7px 12px;
@@ -3967,20 +4036,24 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
 }
 .admin-user-body {
   margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 6px 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
   font-size: 13px;
 }
-.admin-row { display: flex; gap: 8px; }
+.admin-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 12px;
+}
+.admin-row { display: flex; gap: 6px; font-size: 12.5px; }
 .admin-label {
   color: var(--text-dim);
-  min-width: 80px;
+  min-width: 72px;
+  flex-shrink: 0;
 }
 .admin-tags {
-  grid-column: 1 / -1;
-  display: flex; flex-wrap: wrap; gap: 6px;
-  margin-top: 4px;
+  display: flex; flex-wrap: wrap; gap: 5px;
+  margin-top: 8px;
 }
 .admin-tag {
   background: var(--bg);

@@ -51,9 +51,33 @@
 
       <section class="admin-shell">
         <header class="admin-head">
-          <h1>Dashboard</h1>
-          <p class="muted">Moderation tools — every action runs against the live database.</p>
+          <div class="admin-head-row">
+            <div>
+              <h1>Dashboard</h1>
+              <p class="muted">Moderation tools — every action runs against the live database.</p>
+            </div>
+            <button id="admin-refresh" class="btn ghost small" type="button" title="Refresh data">↻ Refresh</button>
+          </div>
         </header>
+
+        <div class="admin-stats" id="admin-stats">
+          <div class="admin-stat">
+            <div class="admin-stat-value" id="stat-total">—</div>
+            <div class="admin-stat-label">Total users</div>
+          </div>
+          <div class="admin-stat">
+            <div class="admin-stat-value" id="stat-profiles">—</div>
+            <div class="admin-stat-label">With profiles</div>
+          </div>
+          <div class="admin-stat">
+            <div class="admin-stat-value" id="stat-open">—</div>
+            <div class="admin-stat-label">Open reports</div>
+          </div>
+          <div class="admin-stat">
+            <div class="admin-stat-value" id="stat-admins-val">—</div>
+            <div class="admin-stat-label">Admins</div>
+          </div>
+        </div>
 
         <nav class="admin-tabs" role="tablist">
           <button class="admin-tab active" data-tab="users" role="tab" aria-selected="true">Users <span class="admin-tab-count" id="admin-users-count">0</span></button>

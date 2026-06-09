@@ -321,27 +321,42 @@ def admin_list_users(
     db: Client = Depends(require_admin),
 ):
     """All accounts, joined with their profile + private identity + prefs.
-    The dashboard renders one row per user with a delete button."""
+    Uses `users` as the source of truth so accounts that registered but
+    never completed their profile still appear in the dashboard."""
     require_admin_caller(uid, db)
-    profiles = db.table("profiles").select(
-        "id, email, nickname, avatar_url, gender, zodiac_sign, is_admin, created_at"
+    users_q = db.table("users").select(
+        "id, email, created_at, ref_campaign"
     ).order("created_at", desc=True).execute()
+    profiles_q = db.table("profiles").select(
+        "id, nickname, avatar_url, gender, zodiac_sign, is_admin"
+    ).execute()
     priv = db.table("private_identities").select(
         "user_id, real_name, age, country, cohort"
     ).execute()
     prefs = db.table("match_preferences").select(
         "user_id, target_intent, term_length, interests, hobbies"
     ).execute()
-    priv_by_id = {r["user_id"]: r for r in priv.data or []}
-    prefs_by_id = {r["user_id"]: r for r in prefs.data or []}
-    return [
-        {
-            **p,
-            "private": priv_by_id.get(p["id"]),
-            "prefs": prefs_by_id.get(p["id"]),
-        }
-        for p in profiles.data or []
-    ]
+    profiles_by_id = {p["id"]: p for p in profiles_q.data or []}
+    priv_by_id     = {r["user_id"]: r for r in priv.data or []}
+    prefs_by_id    = {r["user_id"]: r for r in prefs.data or []}
+    result = []
+    for u in users_q.data or []:
+        p = profiles_by_id.get(u["id"], {})
+        result.append({
+            "id":           u["id"],
+            "email":        u["email"],
+            "created_at":   u.get("created_at"),
+            "ref_campaign": u.get("ref_campaign"),
+            "nickname":     p.get("nickname"),
+            "avatar_url":   p.get("avatar_url"),
+            "gender":       p.get("gender"),
+            "zodiac_sign":  p.get("zodiac_sign"),
+            "is_admin":     p.get("is_admin", False),
+            "has_profile":  bool(p),
+            "private":      priv_by_id.get(u["id"]),
+            "prefs":        prefs_by_id.get(u["id"]),
+        })
+    return result
 
 
 @app.delete("/admin/users/{target_id}")
