@@ -91,7 +91,13 @@ async function fetchSelfProfile(token, userId) {
 }
 
 // ---------- views ----------
+function revealPortal() {
+  $("#admin-loading").classList.add("hidden");
+  $("#admin-portal-root").classList.remove("hidden");
+}
+
 function showLogin(message = "") {
+  revealPortal();
   $("#admin-dash").classList.add("hidden");
   $("#admin-login").classList.remove("hidden");
   const err = $("#admin-login-error");
@@ -100,6 +106,7 @@ function showLogin(message = "") {
 }
 
 function showDashboard(user) {
+  revealPortal();
   $("#admin-login").classList.add("hidden");
   $("#admin-dash").classList.remove("hidden");
   $("#admin-portal-as").textContent = `· signed in as ${user.nickname || user.email}`;
@@ -310,11 +317,52 @@ async function loadEmails() {
   }
 }
 
+// ---------- campaigns ----------
+function paintCampaigns(rows) {
+  const list = $("#admin-campaigns-list");
+  const cntEl = $("#admin-campaigns-count");
+  if (cntEl) cntEl.textContent = rows.length;
+  list.innerHTML = "";
+  if (!rows.length) {
+    list.innerHTML = `<div class="admin-empty">No campaigns yet. Create one above.</div>`;
+    return;
+  }
+  for (const c of rows) {
+    const link = `${location.origin}/?ref=${encodeURIComponent(c.slug)}`;
+    const card = document.createElement("div");
+    card.className = "admin-campaign-card";
+    card.innerHTML = `
+      <div class="admin-campaign-head">
+        <div class="admin-campaign-info">
+          <div class="admin-campaign-name">${escapeHtml(c.name)}</div>
+          <div class="admin-campaign-slug muted">${escapeHtml(c.slug)}</div>
+        </div>
+        <div class="admin-campaign-signups">${c.signups} sign-up${c.signups !== 1 ? "s" : ""}</div>
+        <div class="admin-campaign-actions">
+          <button class="btn ghost small campaign-copy" type="button" data-link="${escapeHtml(link)}">Copy link</button>
+          <button class="btn danger small campaign-delete" type="button" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">Delete</button>
+        </div>
+      </div>
+      <div class="admin-campaign-link muted">${escapeHtml(link)}</div>`;
+    list.appendChild(card);
+  }
+}
+
+async function loadCampaigns() {
+  try {
+    const rows = await api("/admin/campaigns");
+    paintCampaigns(rows);
+  } catch (err) {
+    toast(err.message);
+    $("#admin-campaigns-list").innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
 async function renderDashboard() {
   // Pre-fetch all reports (unfiltered) so the stats bar always shows
   // accurate open-report count regardless of the filter selection.
   try { allReportsAll = await api("/admin/reports"); } catch { allReportsAll = []; }
-  await Promise.all([loadUsers(), loadReports(), loadEmails()]);
+  await Promise.all([loadUsers(), loadReports(), loadEmails(), loadCampaigns()]);
 }
 
 // ---------- wiring ----------
@@ -344,6 +392,56 @@ function wire() {
 
   $("#admin-user-search").addEventListener("input", (e) => paintUsers(e.target.value));
   $("#admin-report-filter").addEventListener("change", loadReports);
+
+  // campaigns — create
+  $("#campaign-name").addEventListener("input", () => {
+    const slugEl = $("#campaign-slug");
+    if (!slugEl.dataset.edited) {
+      slugEl.value = $("#campaign-name").value.trim().toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    }
+  });
+  $("#campaign-slug").addEventListener("input", (e) => {
+    e.target.dataset.edited = e.target.value ? "1" : "";
+  });
+  $("#btn-campaign-create").addEventListener("click", async () => {
+    const name = $("#campaign-name").value.trim();
+    const slug = $("#campaign-slug").value.trim().toLowerCase();
+    if (!name || !slug) { toast("Enter both a name and a slug."); return; }
+    if (!/^[a-z0-9-]+$/.test(slug)) { toast("Slug: lowercase letters, numbers, hyphens only."); return; }
+    const btn = $("#btn-campaign-create");
+    btn.disabled = true;
+    try {
+      await api("/admin/campaigns", { method: "POST", body: { name, slug } });
+      $("#campaign-name").value = "";
+      $("#campaign-slug").value = "";
+      delete $("#campaign-slug").dataset.edited;
+      await loadCampaigns();
+      toast(`Campaign "${name}" created.`);
+    } catch (err) { toast(err.message); }
+    finally { btn.disabled = false; }
+  });
+  $("#campaign-name").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#btn-campaign-create").click(); });
+
+  // campaigns — copy link / delete
+  $("#admin-campaigns-list").addEventListener("click", async (e) => {
+    const copyBtn = e.target.closest(".campaign-copy");
+    if (copyBtn) {
+      await navigator.clipboard.writeText(copyBtn.dataset.link).catch(() => {});
+      toast("Link copied.");
+      return;
+    }
+    const delBtn = e.target.closest(".campaign-delete");
+    if (!delBtn) return;
+    const name = delBtn.dataset.name;
+    if (!window.confirm(`Delete campaign "${name}"? The slug will stop accepting new sign-ups.`)) return;
+    delBtn.disabled = true;
+    try {
+      await api(`/admin/campaigns/${encodeURIComponent(delBtn.dataset.id)}`, { method: "DELETE" });
+      await loadCampaigns();
+      toast(`Deleted "${name}".`);
+    } catch (err) { toast(err.message); delBtn.disabled = false; }
+  });
 
   $("#admin-add-email").addEventListener("click", async () => {
     const input = $("#admin-new-email");

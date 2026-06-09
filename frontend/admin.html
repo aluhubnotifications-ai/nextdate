@@ -8,7 +8,15 @@
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
 </head>
 <body>
-  <div id="admin-portal-root">
+  <!-- Shown while the JS checks for a stored session -->
+  <div id="admin-loading" class="admin-loading-screen">
+    <div class="admin-loading-inner">
+      <span class="admin-loading-icon" aria-hidden="true">🛡️</span>
+      <p class="muted">Loading…</p>
+    </div>
+  </div>
+
+  <div id="admin-portal-root" class="hidden">
     <!-- Login screen -->
     <section id="admin-login" class="center-wrap">
       <div class="card auth-card admin-login-card">
@@ -82,6 +90,7 @@
         <nav class="admin-tabs" role="tablist">
           <button class="admin-tab active" data-tab="users" role="tab" aria-selected="true">Users <span class="admin-tab-count" id="admin-users-count">0</span></button>
           <button class="admin-tab" data-tab="reports" role="tab" aria-selected="false">Reports <span class="admin-tab-count" id="admin-reports-count">0</span></button>
+          <button class="admin-tab" data-tab="campaigns" role="tab" aria-selected="false">Campaigns <span class="admin-tab-count" id="admin-campaigns-count">0</span></button>
           <button class="admin-tab" data-tab="admins" role="tab" aria-selected="false">Admin emails <span class="admin-tab-count" id="admin-admins-count">0</span></button>
         </nav>
 
@@ -102,6 +111,15 @@
             </select>
           </div>
           <div class="admin-list" id="admin-reports-list"></div>
+        </section>
+
+        <section class="admin-pane hidden" data-pane="campaigns">
+          <div class="admin-toolbar">
+            <input id="campaign-name" class="admin-search" placeholder="Campaign name (e.g. Campus Drive May)" style="flex:1" />
+            <input id="campaign-slug" class="admin-search" placeholder="slug (e.g. campus-may)" style="width:160px;flex:none" />
+            <button id="btn-campaign-create" class="btn small" type="button">Create</button>
+          </div>
+          <div id="admin-campaigns-list" class="admin-list"></div>
         </section>
 
         <section class="admin-pane hidden" data-pane="admins">
