@@ -111,6 +111,11 @@ class ResetPasswordBody(BaseModel):
     password: str = Field(min_length=6, max_length=128)
 
 
+class ChangeEmailBody(BaseModel):
+    new_email: EmailStr
+    password: str
+
+
 class AuthResponse(BaseModel):
     user_id: str
     email: EmailStr

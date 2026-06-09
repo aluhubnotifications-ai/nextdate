@@ -1435,10 +1435,60 @@ function renderOnboarding(root) {
 
   if (state.profile) {
     $("#nickname").value     = state.profile.nickname || "";
-    $("#avatar_url").value   = state.profile.avatar_url || "🦊";
+    // avatar_url can be either an emoji string or a base64 photo dataURL.
+    // Pre-load the emoji select with the emoji value (or default), but if
+    // the stored value is a photo we'll pick that up below when we wire
+    // the avatar picker.
+    const storedAvatar = state.profile.avatar_url || "🦊";
+    if (!safeImageDataURL(storedAvatar)) {
+      $("#avatar_url").value = storedAvatar;
+    }
     $("#gender").value       = state.profile.gender || "";
     $("#zodiac_sign").value  = state.profile.zodiac_sign || "";
   }
+
+  // Avatar photo picker (step 1) — stores compressed photo in
+  // state.avatarPhotoData. When set it takes priority over the emoji select.
+  state.avatarPhotoData = safeImageDataURL(state.profile?.avatar_url) || null;
+  const avPickPreview = $("#av-pick-preview");
+  const avPickBtn     = $("#av-pick-btn");
+  const avPickClear   = $("#av-pick-clear");
+  const avPickFile    = $("#av-pick-file");
+
+  function paintAvPickPreview() {
+    if (state.avatarPhotoData) {
+      fillAvatar(avPickPreview, state.avatarPhotoData);
+      if (avPickClear) avPickClear.hidden = false;
+      if (avPickBtn)   avPickBtn.textContent = "Change photo";
+    } else {
+      const emoji = $("#avatar_url")?.value || "🦊";
+      if (avPickPreview) avPickPreview.textContent = emoji;
+      if (avPickClear) avPickClear.hidden = true;
+      if (avPickBtn)   avPickBtn.textContent = "Upload photo";
+    }
+  }
+  paintAvPickPreview();
+
+  if (avPickBtn) avPickBtn.onclick = () => avPickFile?.click();
+  if (avPickClear) avPickClear.onclick = () => { state.avatarPhotoData = null; paintAvPickPreview(); };
+  if (avPickFile) avPickFile.onchange = async (ev) => {
+    const file = ev.target.files?.[0];
+    ev.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast("Please pick an image."); return; }
+    if (file.size > 5 * 1024 * 1024) { toast("Image too large — pick one under 5 MB."); return; }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const safe = safeImageDataURL(reader.result);
+      if (!safe) { toast("That image format isn't supported. Try PNG, JPG, or WebP."); return; }
+      state.avatarPhotoData = await compressAvatar(safe);
+      paintAvPickPreview();
+    };
+    reader.onerror = () => toast("Couldn't read that file.");
+    reader.readAsDataURL(file);
+  };
+  // Keep emoji preview in sync when user changes emoji select (only when no photo set)
+  $("#avatar_url")?.addEventListener("change", () => { if (!state.avatarPhotoData) paintAvPickPreview(); });
   if (state.prefs) {
     $("#target_intent").value        = state.prefs.target_intent || "Friendships";
     $("#term_length").value          = state.prefs.term_length || "Short-term";
@@ -1504,7 +1554,9 @@ function renderOnboarding(root) {
       id: state.user.id,
       email: state.user.email,
       nickname,
-      avatar_url: $("#avatar_url").value,
+      // If the user uploaded a photo, use it as their avatar; otherwise use
+      // whichever emoji they picked in the select.
+      avatar_url: state.avatarPhotoData || $("#avatar_url").value,
       gender: $("#gender").value || null,
       zodiac_sign: $("#zodiac_sign").value || null,
     };
@@ -1845,7 +1897,7 @@ function buildSwipeCard(user, isFront, remaining) {
 
   card.innerHTML = `
     <div class="swipe-hero">
-      <div class="swipe-avatar">${escapeHtml(user.avatar_url || "🧑")}</div>
+      <div class="swipe-avatar">${avatarInnerHtml(user.avatar_url || "🧑")}</div>
       ${scoreChip}
     </div>
     <div class="swipe-body">
@@ -2026,8 +2078,8 @@ function showMatchOverlay(user, sessionId) {
 
   // Populate avatars
   const meProfile = state.profile;
-  overlay.querySelector(".match-av-me").textContent = meProfile?.avatar_url || "🦊";
-  overlay.querySelector(".match-av-them").textContent = user.avatar_url || "🌸";
+  fillAvatar(overlay.querySelector(".match-av-me"), meProfile?.avatar_url || "🦊");
+  fillAvatar(overlay.querySelector(".match-av-them"), user.avatar_url || "🌸");
 
   // Subline
   overlay.querySelector(".match-subline").textContent =
@@ -2109,7 +2161,7 @@ async function renderMatches(root) {
     const tile = document.createElement("button");
     tile.className = "match-tile";
     tile.innerHTML = `
-      <div class="match-avatar">${escapeHtml(peer.avatar_url || "🦊")}</div>
+      <div class="match-avatar">${avatarInnerHtml(peer.avatar_url || "🦊")}</div>
       <div class="match-name">${escapeHtml(peer.nickname || "Unknown")}</div>
       <div class="match-meta">${[peer.gender, peer.zodiac_sign].filter(Boolean).map(escapeHtml).join(" • ") || "—"}</div>
     `;
@@ -2321,7 +2373,7 @@ function paintInfoPanel() {
   if (!s) return;
   const peer = s.peer_profile || {};
   const infoAv = $("#info-avatar");
-  infoAv.innerHTML = `${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span>`;
+  fillAvatar(infoAv, peer.avatar_url || "🦊", { statusDot: true });
   infoAv.dataset.presenceUser = s.peer_id || peer.id || "";
   paintPresence();
   $("#info-name").textContent = peer.nickname || "Unknown";
@@ -2696,7 +2748,7 @@ async function loadSessions({ background = false } = {}) {
     row.dataset.sessionId = s.id;
     row.dataset.peerName = peer.nickname || "";
     row.innerHTML = `
-      <div class="avatar" data-presence-user="${escapeHtml(peerId)}">${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span></div>
+      <div class="avatar" data-presence-user="${escapeHtml(peerId)}">${avatarInnerHtml(peer.avatar_url || "🦊", { statusDot: true })}</div>
       <div class="session-body">
         <div class="session-top">
           <div class="session-name">${escapeHtml(peer.nickname)}</div>
@@ -2803,7 +2855,7 @@ async function openSession(sessionId) {
   $("#chat-active").classList.remove("hidden");
 
   const peerAv = $("#peer-avatar");
-  peerAv.innerHTML = `${escapeHtml(peer.avatar_url || "🦊")}<span class="status-dot"></span>`;
+  fillAvatar(peerAv, peer.avatar_url || "🦊", { statusDot: true });
   peerAv.dataset.presenceUser = peer.id || "";
   $("#peer-name").textContent = peer.nickname;
   const metaParts = [peer.gender, peer.zodiac_sign].filter(Boolean).map(escapeHtml).join(" · ");
@@ -4524,7 +4576,7 @@ function renderProfile(root) {
   root.append($("#tpl-profile").content.cloneNode(true));
   const p = state.profile, pr = state.prefs, pi = state.privateIdentity;
   const metaBits = [p?.gender, p?.zodiac_sign].filter(Boolean).map(escapeHtml).join(" · ") || "—";
-  $("#profile-avatar").textContent = p?.avatar_url || "🦊";
+  fillAvatar($("#profile-avatar"), p?.avatar_url || "🦊");
   $("#profile-name").textContent = p?.nickname || "—";
   $("#profile-tagline").textContent = metaBits;
   $("#profile-summary").innerHTML = `
@@ -4574,10 +4626,74 @@ function renderProfile(root) {
   $("#edit-profile").onclick = () => navigate("onboarding");
   $("#profile-logout").onclick = () => doLogout();
   $("#delete-account").onclick = () => deleteAccount();
+
+  // Email display + change
+  const emailValEl = $("#profile-email-val");
+  if (emailValEl) emailValEl.textContent = state.user?.email || "—";
+  wireEmailChange();
+
   const copy = document.createElement("div");
   copy.className = "profile-copyright";
   copy.innerHTML = `<span class="mark">&copy; 2026 NextDate</span> &middot; All rights reserved.`;
   root.appendChild(copy);
+}
+
+function wireEmailChange() {
+  const btn       = $("#change-email-btn");
+  const form      = $("#email-change-inline");
+  const confirmBtn = $("#confirm-email-change");
+  const cancelBtn  = $("#cancel-email-change");
+  const errEl      = $("#email-change-error");
+  if (!btn || !form) return;
+
+  function showErr(msg) {
+    if (!errEl) return;
+    errEl.textContent = msg;
+    errEl.classList.toggle("hidden", !msg);
+  }
+
+  btn.onclick = () => {
+    form.classList.remove("hidden");
+    btn.classList.add("hidden");
+    showErr("");
+    $("#new-email-input")?.focus();
+  };
+  cancelBtn.onclick = () => {
+    form.classList.add("hidden");
+    btn.classList.remove("hidden");
+    if ($("#new-email-input")) $("#new-email-input").value = "";
+    if ($("#email-pw-input"))  $("#email-pw-input").value  = "";
+    showErr("");
+  };
+  confirmBtn.onclick = async () => {
+    const newEmail = ($("#new-email-input")?.value || "").trim();
+    const pw       = $("#email-pw-input")?.value || "";
+    if (!newEmail || !newEmail.includes("@")) { showErr("Enter a valid email address."); return; }
+    if (!pw) { showErr("Enter your current password."); return; }
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Saving…";
+    try {
+      const res = await api("/auth/me/email", { method: "PATCH", body: { new_email: newEmail, password: pw } });
+      // Update stored token + cached user so the new email is reflected
+      state.user = { ...state.user, email: res.email };
+      if (res.token) tokens.set(res.token);
+      const cu = cachedUser.get();
+      if (cu) cachedUser.set({ ...cu, email: res.email });
+      if ($("#profile-email-val")) $("#profile-email-val").textContent = res.email;
+      form.classList.add("hidden");
+      btn.classList.remove("hidden");
+      if ($("#new-email-input")) $("#new-email-input").value = "";
+      if ($("#email-pw-input"))  $("#email-pw-input").value  = "";
+      toast("Email updated.");
+    } catch (err) {
+      showErr(err.message || "Something went wrong.");
+    } finally {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Save";
+    }
+  };
+  // Allow Enter in the password field to submit
+  $("#email-pw-input")?.addEventListener("keydown", (e) => { if (e.key === "Enter") confirmBtn.click(); });
 }
 
 function wireNotifToggle() {
@@ -4694,6 +4810,59 @@ function setAvatarImage(container, src, { withStatusDot = false } = {}) {
     container.appendChild(dot);
   }
   return true;
+}
+
+// Fills any avatar container with either a photo <img> or emoji text.
+// Use this everywhere instead of direct .textContent = avatarUrl or
+// .innerHTML = escapeHtml(avatarUrl) so that photo avatars render as images.
+function fillAvatar(el, url, { statusDot = false } = {}) {
+  if (!el) return;
+  el.innerHTML = "";
+  const safe = safeImageDataURL(url);
+  if (safe) {
+    const img = document.createElement("img");
+    img.setAttribute("src", safe);
+    img.alt = "";
+    img.className = "av-photo";
+    el.appendChild(img);
+  } else {
+    el.appendChild(document.createTextNode(url || "🦊"));
+  }
+  if (statusDot) {
+    const dot = document.createElement("span");
+    dot.className = "status-dot";
+    el.appendChild(dot);
+  }
+}
+
+// Returns the inner HTML string for an avatar container (used when the
+// container is built via template-literal innerHTML). Photo dataURLs are
+// validated by safeImageDataURL before embedding, so XSS is not possible.
+function avatarInnerHtml(url, { statusDot = false } = {}) {
+  const safe = safeImageDataURL(url);
+  const dot = statusDot ? '<span class="status-dot"></span>' : "";
+  if (safe) return `<img src="${safe}" alt="" class="av-photo">${dot}`;
+  return `${escapeHtml(url || "🦊")}${dot}`;
+}
+
+// Resize + compress an avatar image to ≤ 150px × 150px JPEG via canvas
+// so base64 avatars stored in profiles.avatar_url stay small (< ~20 KB).
+function compressAvatar(dataURL) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 150;
+      const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+      const w = Math.round(img.width * ratio);
+      const h = Math.round(img.height * ratio);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.78));
+    };
+    img.onerror = () => resolve(dataURL);
+    img.src = dataURL;
+  });
 }
 
 // E2E encryption removed — messages are stored as plaintext.

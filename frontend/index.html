@@ -424,16 +424,27 @@
           <div class="row">
             <div class="field"><label>Nickname <span class="req">*</span></label><input id="nickname" placeholder="e.g. NightOwl" /></div>
             <div class="field"><label>Avatar</label>
-              <select id="avatar_url">
-                <option value="🦊">🦊 Fox</option>
-                <option value="🐼">🐼 Panda</option>
-                <option value="🦄">🦄 Unicorn</option>
-                <option value="🐙">🐙 Octopus</option>
-                <option value="🌸">🌸 Bloom</option>
-                <option value="🦁">🦁 Lion</option>
-                <option value="🐝">🐝 Bee</option>
-                <option value="🐢">🐢 Turtle</option>
-              </select>
+              <div class="av-picker">
+                <div class="av-picker-preview" id="av-pick-preview">🦊</div>
+                <div class="av-picker-right">
+                  <div class="av-picker-row">
+                    <input type="file" id="av-pick-file" accept="image/*" hidden />
+                    <button class="btn ghost sm" type="button" id="av-pick-btn">Upload photo</button>
+                    <button class="btn ghost sm" type="button" id="av-pick-clear" hidden>Remove</button>
+                  </div>
+                  <div class="muted" style="font-size:12px;margin:6px 0 4px;">Or pick an emoji:</div>
+                  <select id="avatar_url">
+                    <option value="🦊">🦊 Fox</option>
+                    <option value="🐼">🐼 Panda</option>
+                    <option value="🦄">🦄 Unicorn</option>
+                    <option value="🐙">🐙 Octopus</option>
+                    <option value="🌸">🌸 Bloom</option>
+                    <option value="🦁">🦁 Lion</option>
+                    <option value="🐝">🐝 Bee</option>
+                    <option value="🐢">🐢 Turtle</option>
+                  </select>
+                </div>
+              </div>
             </div>
             <div class="field"><label>Gender</label>
               <select id="gender">
@@ -814,6 +825,31 @@
           <div class="profile-tagline" id="profile-tagline">—</div>
         </div>
         <div id="profile-summary"></div>
+        <div id="email-change-section" class="profile-section" style="margin-top:0">
+          <div class="profile-section-label">Account</div>
+          <div class="profile-rows">
+            <div class="identity-row">
+              <span>Email</span>
+              <span id="profile-email-val" class="muted"></span>
+            </div>
+            <div id="email-change-inline" class="hidden">
+              <div class="field" style="margin-top:10px">
+                <label>New email</label>
+                <input id="new-email-input" type="email" autocomplete="email" />
+              </div>
+              <div class="field">
+                <label>Current password</label>
+                <input id="email-pw-input" type="password" autocomplete="current-password" />
+              </div>
+              <div class="email-change-btns">
+                <button class="btn small" id="confirm-email-change" type="button">Save</button>
+                <button class="btn ghost small" id="cancel-email-change" type="button">Cancel</button>
+              </div>
+              <p id="email-change-error" class="muted email-change-error hidden"></p>
+            </div>
+            <button class="btn ghost small" id="change-email-btn" type="button">Change email</button>
+          </div>
+        </div>
         <div class="profile-actions">
           <button class="btn" id="edit-profile">Edit profile</button>
           <button class="btn ghost" id="profile-logout">Log out</button>

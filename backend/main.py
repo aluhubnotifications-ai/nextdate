@@ -29,6 +29,7 @@ from supabase import Client, create_client
 
 from models import (
     AuthResponse,
+    ChangeEmailBody,
     ForgotPasswordBody,
     LoginBody,
     Profile,
@@ -245,6 +246,27 @@ def me(uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
     if not rows.data:
         raise HTTPException(status_code=404, detail="User not found.")
     return rows.data[0]
+
+
+@app.patch("/auth/me/email")
+def change_email(body: ChangeEmailBody, uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
+    new_email = str(body.new_email).strip().lower()
+    # Verify current password before allowing any change.
+    rows = db.table("users").select("password_hash, email").eq("id", uid).limit(1).execute()
+    if not rows.data:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if not verify_password(body.password, rows.data[0]["password_hash"]):
+        raise HTTPException(status_code=401, detail="Incorrect password.")
+    if rows.data[0]["email"].lower() == new_email:
+        raise HTTPException(status_code=400, detail="That's already your email address.")
+    # Check the new address isn't taken.
+    existing = db.table("users").select("id").eq("email", new_email).limit(1).execute()
+    if existing.data:
+        raise HTTPException(status_code=409, detail="Email already in use.")
+    db.table("users").update({"email": new_email}).eq("id", uid).execute()
+    db.table("profiles").update({"email": new_email}).eq("id", uid).execute()
+    new_token = mint_jwt(uid, new_email)
+    return AuthResponse(user_id=uid, email=new_email, token=new_token, expires_in=JWT_TTL_SECONDS)
 
 
 @app.delete("/auth/me")
