@@ -816,8 +816,7 @@ function refreshConfigInBackground() {
     return;
   }
 
-  // If the URL carries a password-reset token, show the reset pane regardless
-  // of whether the user is currently signed in.
+  // Password-reset link — show reset pane regardless of session state.
   if (new URLSearchParams(window.location.search).get("token")) {
     setNavVisible(false);
     return navigate("auth");
@@ -825,12 +824,39 @@ function refreshConfigInBackground() {
 
   const initialToken = tokens.get();
   if (!initialToken) {
-    // Defer client construction until sign-in so we don't spawn an
-    // anonymous GoTrue instance that the login flow then has to replace.
     setNavVisible(false);
     return navigate("auth");
   }
+
   buildSupabase(initialToken);
+
+  // ── Facebook-style instant shell ────────────────────────────────────────
+  // If we have a cached user from a previous session, paint the nav and
+  // the discover skeleton *immediately* — before any network call finishes.
+  // Token validation and data hydration then happen in the background so
+  // the user sees content within a frame of the page loading rather than
+  // staring at a blank screen for 1-10 seconds.
+  const cached = cachedUser.get();
+  if (cached?.id) {
+    state.user = cached;
+    setNavVisible(true);
+    navigate("discover");           // renders skeleton cards right away
+    try {
+      const me = await api("/auth/me");
+      state.user = { id: me.id, email: me.email };
+      cachedUser.set(state.user);
+      await hydrateSession(state.user);
+    } catch (err) {
+      console.warn("Session invalid:", err.message);
+      clearSession();
+      setNavVisible(false);
+      navigate("auth");
+    }
+    return;
+  }
+
+  // No cached user (first page-load after a fresh login) — show nothing
+  // until validation completes, then navigate normally.
   progressStart();
   try {
     const me = await api("/auth/me");
@@ -845,6 +871,7 @@ function refreshConfigInBackground() {
   }
 })();
 
+// Called after a fresh login (no cache) — loads all data then navigates.
 async function onSignedIn(user) {
   state.user = user;
   cachedUser.set(user);
@@ -858,8 +885,6 @@ async function onSignedIn(user) {
   state.profile = profileRes.data;
   state.prefs = prefsRes.data;
   state.privateIdentity = privRes.data;
-  // Re-evaluate nav visibility now that we know whether this account
-  // carries the admin flag.
   setNavVisible(true);
 
   if (!state.profile || !state.prefs) {
@@ -874,6 +899,35 @@ async function onSignedIn(user) {
   startHeartbeat();
   navigate("discover");
   try { window.maybePromptForNotifications?.(); } catch {}
+}
+
+// Called in the optimistic path after the token is validated in the
+// background. The skeleton is already showing; we just hydrate state
+// and wire up realtime without touching the view unless onboarding is needed.
+async function hydrateSession(user) {
+  const [profileRes, prefsRes, privRes] = await Promise.all([
+    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+    supabase.from("match_preferences").select("*").eq("user_id", user.id).maybeSingle(),
+    supabase.from("private_identities").select("*").eq("user_id", user.id).maybeSingle(),
+  ]);
+  state.profile = profileRes.data;
+  state.prefs = prefsRes.data;
+  state.privateIdentity = privRes.data;
+  setNavVisible(true);
+
+  if (!state.profile || !state.prefs) {
+    return navigate("onboarding");
+  }
+  await loadBlockedUsers();
+  await loadNotifications();
+  subscribeNotifications();
+  subscribeGlobalMessages();
+  subscribeDeckInvalidation();
+  subscribePresence();
+  startHeartbeat();
+  try { window.maybePromptForNotifications?.(); } catch {}
+  // The discover view is already rendered and cards are loading/loaded —
+  // no navigate() call needed here.
 }
 
 
