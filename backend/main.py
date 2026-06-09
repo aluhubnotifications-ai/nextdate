@@ -61,11 +61,13 @@ RESET_TOKEN_TTL_SECONDS = 3600  # 1 hour
 
 
 def send_reset_email(to_email: str, token: str) -> None:
-    if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
-        print(f"[warn] SMTP not configured — skipping reset email to {to_email}. Token: {token}")
-        return
-
     reset_url = f"{APP_URL}?token={token}"
+
+    if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
+        missing = [k for k, v in {"SMTP_HOST": SMTP_HOST, "SMTP_USER": SMTP_USER, "SMTP_PASSWORD": SMTP_PASSWORD}.items() if not v]
+        print(f"[RESET] SMTP not configured (missing: {', '.join(missing)}) — use this link to reset manually:")
+        print(f"[RESET] {reset_url}")
+        return
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "Reset your NextDate password"
