@@ -87,7 +87,9 @@ def send_reset_email(to_email: str, token: str) -> None:
         json={"from": EMAIL_FROM, "to": [to_email], "subject": "Reset your NextDate password", "html": html, "text": text},
         timeout=10,
     )
-    resp.raise_for_status()
+    if not resp.is_success:
+        print(f"[RESET] Resend {resp.status_code}: {resp.text}")
+        resp.raise_for_status()
 
 def _build_admin_client() -> Optional[Client]:
     if not (SUPABASE_URL and SUPABASE_SERVICE_KEY):
