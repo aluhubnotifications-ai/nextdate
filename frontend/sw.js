@@ -4,7 +4,7 @@
 // doesn't poison the cache; the fetch handler always falls back to
 // network so the page can still load even if the cache is empty.
 
-const VERSION = "nextdate-v6";
+const VERSION = "nextdate-v7";
 const SHELL = [
   "./",
   "./index.html",
