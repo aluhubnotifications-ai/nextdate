@@ -12,15 +12,13 @@ import math
 import os
 import re
 import secrets
-import smtplib
-import ssl
 import time
 import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from typing import List, Optional
+
+import httpx
 
 import bcrypt
 import jwt
@@ -50,12 +48,9 @@ if not (SUPABASE_URL and SUPABASE_SERVICE_KEY and SUPABASE_JWT_SECRET):
 if not SUPABASE_ANON_KEY:
     print("[warn] SUPABASE_ANON_KEY not set — frontend config endpoint will fail.")
 
-SMTP_HOST     = os.environ.get("SMTP_HOST", "")
-SMTP_PORT     = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER     = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-SMTP_FROM     = os.environ.get("SMTP_FROM", "") or SMTP_USER
-APP_URL       = os.environ.get("APP_URL", "https://nextdate.pages.dev")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM     = os.environ.get("EMAIL_FROM", "NextDate <onboarding@resend.dev>")
+APP_URL        = os.environ.get("APP_URL", "https://nextdate.pages.dev")
 
 RESET_TOKEN_TTL_SECONDS = 3600  # 1 hour
 
@@ -63,16 +58,10 @@ RESET_TOKEN_TTL_SECONDS = 3600  # 1 hour
 def send_reset_email(to_email: str, token: str) -> None:
     reset_url = f"{APP_URL}?token={token}"
 
-    if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
-        missing = [k for k, v in {"SMTP_HOST": SMTP_HOST, "SMTP_USER": SMTP_USER, "SMTP_PASSWORD": SMTP_PASSWORD}.items() if not v]
-        print(f"[RESET] SMTP not configured (missing: {', '.join(missing)}) — use this link to reset manually:")
+    if not RESEND_API_KEY:
+        print("[RESET] No RESEND_API_KEY set — use this link to reset manually:")
         print(f"[RESET] {reset_url}")
         return
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Reset your NextDate password"
-    msg["From"]    = SMTP_FROM
-    msg["To"]      = to_email
 
     text = (
         f"Hi,\n\nReset your NextDate password here: {reset_url}\n\n"
@@ -91,14 +80,14 @@ def send_reset_email(to_email: str, token: str) -> None:
 <p style="word-break:break-all;">Or copy this link: {reset_url}</p>
 <p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
 """
-    msg.attach(MIMEText(text, "plain"))
-    msg.attach(MIMEText(html, "html"))
 
-    ctx = ssl.create_default_context()
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.starttls(context=ctx)
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SMTP_FROM, to_email, msg.as_string())
+    resp = httpx.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+        json={"from": EMAIL_FROM, "to": [to_email], "subject": "Reset your NextDate password", "html": html, "text": text},
+        timeout=10,
+    )
+    resp.raise_for_status()
 
 def _build_admin_client() -> Optional[Client]:
     if not (SUPABASE_URL and SUPABASE_SERVICE_KEY):
