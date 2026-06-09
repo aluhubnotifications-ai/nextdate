@@ -836,6 +836,7 @@
       <nav class="admin-tabs" role="tablist">
         <button class="admin-tab active" data-tab="users" role="tab" aria-selected="true">Users <span class="admin-tab-count" id="admin-users-count">0</span></button>
         <button class="admin-tab" data-tab="reports" role="tab" aria-selected="false">Reports <span class="admin-tab-count" id="admin-reports-count">0</span></button>
+        <button class="admin-tab" data-tab="campaigns" role="tab" aria-selected="false">Campaigns <span class="admin-tab-count" id="admin-campaigns-count">0</span></button>
       </nav>
 
       <section class="admin-pane" data-pane="users">
@@ -855,6 +856,15 @@
           </select>
         </div>
         <div class="admin-list" id="admin-reports-list"></div>
+      </section>
+
+      <section class="admin-pane hidden" data-pane="campaigns">
+        <div class="admin-toolbar admin-campaign-form">
+          <input id="campaign-name" class="admin-search" placeholder="Campaign name (e.g. Campus Drive May)" style="flex:1;" />
+          <input id="campaign-slug" class="admin-search" placeholder="slug (e.g. campus-may)" style="width:160px;" />
+          <button id="btn-campaign-create" class="btn sm" type="button">Create</button>
+        </div>
+        <div class="admin-list" id="admin-campaigns-list"></div>
       </section>
     </section>
   </template>

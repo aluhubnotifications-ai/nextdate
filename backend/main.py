@@ -219,9 +219,10 @@ def signup(body: SignupBody, db: Client = Depends(require_admin)):
         raise HTTPException(status_code=409, detail="Email already registered.")
 
     new_id = str(uuid.uuid4())
-    db.table("users").insert(
-        {"id": new_id, "email": email, "password_hash": hash_password(body.password)}
-    ).execute()
+    user_row: dict = {"id": new_id, "email": email, "password_hash": hash_password(body.password)}
+    if body.ref:
+        user_row["ref_campaign"] = body.ref.strip()[:80]
+    db.table("users").insert(user_row).execute()
 
     token = mint_jwt(new_id, email)
     return AuthResponse(user_id=new_id, email=email, token=token, expires_in=JWT_TTL_SECONDS)
@@ -462,6 +463,41 @@ def admin_resolve_report(
         "resolved_by": None if new_status == "open" else uid,
     }).eq("id", report_id).execute()
     return {"ok": True, "status": new_status}
+
+
+@app.get("/admin/campaigns")
+def admin_list_campaigns(uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
+    require_admin_caller(uid, db)
+    campaigns = db.table("campaigns").select("*").order("created_at", desc=True).execute()
+    rows = campaigns.data or []
+    # Count signups per slug in one query.
+    signups = db.table("users").select("ref_campaign").not_.is_("ref_campaign", "null").execute()
+    count_map: dict[str, int] = {}
+    for u in signups.data or []:
+        s = u.get("ref_campaign")
+        if s:
+            count_map[s] = count_map.get(s, 0) + 1
+    return [{**r, "signups": count_map.get(r["slug"], 0)} for r in rows]
+
+
+@app.post("/admin/campaigns")
+def admin_create_campaign(body: dict = None, uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
+    require_admin_caller(uid, db)
+    name = ((body or {}).get("name") or "").strip()
+    slug = ((body or {}).get("slug") or "").strip().lower()
+    if not name or not slug:
+        raise HTTPException(status_code=400, detail="name and slug are required.")
+    if not re.match(r'^[a-z0-9-]+$', slug):
+        raise HTTPException(status_code=400, detail="Slug must be lowercase letters, numbers, and hyphens only.")
+    db.table("campaigns").insert({"slug": slug, "name": name, "created_by": uid}).execute()
+    return {"ok": True}
+
+
+@app.delete("/admin/campaigns/{campaign_id}")
+def admin_delete_campaign(campaign_id: str, uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
+    require_admin_caller(uid, db)
+    db.table("campaigns").delete().eq("id", campaign_id).execute()
+    return {"ok": True}
 
 
 # ---------- TF-IDF cosine matching ----------

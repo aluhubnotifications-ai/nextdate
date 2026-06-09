@@ -786,6 +786,10 @@ function refreshConfigInBackground() {
 
 // ---------- init ----------
 (async function init() {
+  // Capture ?ref= campaign slug before anything else clears the URL.
+  const _ref = new URLSearchParams(window.location.search).get("ref");
+  if (_ref) sessionStorage.setItem("nd_ref", _ref);
+
   await loadConfig();
   initTheme();
   wireGlobalModals();
@@ -1275,7 +1279,9 @@ function renderAuth(root) {
     buttonLoading(signupBtn, true);
     progressStart();
     try {
-      const res = await api("/auth/signup", { method: "POST", body: { email, password }, auth: false });
+      const ref = sessionStorage.getItem("nd_ref") || undefined;
+      const res = await api("/auth/signup", { method: "POST", body: { email, password, ...(ref && { ref }) }, auth: false });
+      if (ref) sessionStorage.removeItem("nd_ref");
       setSession(res.token, { id: res.user_id, email: res.email });
       await onSignedIn({ id: res.user_id, email: res.email });
     } catch (err) { toast(err.message); }
@@ -4415,7 +4421,102 @@ async function renderAdmin(root) {
     finally { buttonLoading(btn, false); }
   });
 
-  await Promise.all([loadUsers(), loadReports()]);
+  // ---------- campaigns tab ----------
+  const campaignsList  = $("#admin-campaigns-list");
+  const campaignsCount = $("#admin-campaigns-count");
+
+  function paintCampaigns(rows) {
+    campaignsCount.textContent = rows.length;
+    campaignsList.innerHTML = "";
+    if (!rows.length) {
+      campaignsList.innerHTML = `<div class="admin-empty">No campaigns yet. Create one above.</div>`;
+      return;
+    }
+    for (const c of rows) {
+      const link = `${location.origin}/?ref=${encodeURIComponent(c.slug)}`;
+      const card = document.createElement("div");
+      card.className = "admin-campaign-card";
+      card.innerHTML = `
+        <div class="admin-campaign-head">
+          <div class="admin-campaign-info">
+            <div class="admin-campaign-name">${escapeHtml(c.name)}</div>
+            <div class="admin-campaign-slug muted">${escapeHtml(c.slug)}</div>
+          </div>
+          <div class="admin-campaign-signups">${c.signups} sign-up${c.signups !== 1 ? "s" : ""}</div>
+          <div class="admin-campaign-actions">
+            <button class="btn ghost sm campaign-copy" type="button" data-link="${escapeHtml(link)}">Copy link</button>
+            <button class="btn danger sm campaign-delete" type="button" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">Delete</button>
+          </div>
+        </div>
+        <div class="admin-campaign-link muted">${escapeHtml(link)}</div>`;
+      campaignsList.appendChild(card);
+    }
+  }
+
+  async function loadCampaigns() {
+    try {
+      const rows = await api("/admin/campaigns");
+      paintCampaigns(rows);
+    } catch (err) {
+      toast(err.message);
+      campaignsList.innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  $("#btn-campaign-create").onclick = async () => {
+    const name = $("#campaign-name").value.trim();
+    const slug = $("#campaign-slug").value.trim().toLowerCase();
+    if (!name || !slug) return toast("Enter both a name and a slug.");
+    if (!/^[a-z0-9-]+$/.test(slug)) return toast("Slug: lowercase letters, numbers, hyphens only.");
+    const btn = $("#btn-campaign-create");
+    buttonLoading(btn, true);
+    try {
+      await api("/admin/campaigns", { method: "POST", body: { name, slug } });
+      $("#campaign-name").value = "";
+      $("#campaign-slug").value = "";
+      await loadCampaigns();
+      toast(`Campaign "${name}" created.`);
+    } catch (err) { toast(err.message); }
+    finally { buttonLoading(btn, false); }
+  };
+
+  // Auto-generate slug from name as user types.
+  $("#campaign-name").addEventListener("input", () => {
+    const slugEl = $("#campaign-slug");
+    if (!slugEl.dataset.edited) {
+      slugEl.value = $("#campaign-name").value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    }
+  });
+  $("#campaign-slug").addEventListener("input", () => {
+    $("#campaign-slug").dataset.edited = "1";
+  });
+
+  campaignsList.addEventListener("click", async (e) => {
+    const copyBtn = e.target.closest(".campaign-copy");
+    if (copyBtn) {
+      await navigator.clipboard.writeText(copyBtn.dataset.link).catch(() => {});
+      toast("Link copied!");
+      return;
+    }
+    const delBtn = e.target.closest(".campaign-delete");
+    if (!delBtn) return;
+    openConfirmModal({
+      title: `Delete "${delBtn.dataset.name}"?`,
+      text: "Existing signup counts are preserved in the database but the campaign row will be gone.",
+      okLabel: "Delete",
+      onConfirm: async () => {
+        buttonLoading(delBtn, true);
+        try {
+          await api(`/admin/campaigns/${encodeURIComponent(delBtn.dataset.id)}`, { method: "DELETE" });
+          await loadCampaigns();
+          toast("Campaign deleted.");
+        } catch (err) { toast(err.message); }
+        finally { buttonLoading(delBtn, false); }
+      },
+    });
+  });
+
+  await Promise.all([loadUsers(), loadReports(), loadCampaigns()]);
 }
 
 // ---------- PROFILE ----------

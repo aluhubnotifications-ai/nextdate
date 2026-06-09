@@ -94,6 +94,7 @@ class Message(BaseModel):
 class SignupBody(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
+    ref: Optional[str] = None
 
 
 class LoginBody(BaseModel):
