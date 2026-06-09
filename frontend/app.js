@@ -1061,6 +1061,20 @@ async function loadNotifications() {
     .limit(100);
   if (error) { console.warn("notifications load:", error.message); return; }
   state.notifications = (data || []).map(mapDbNotif);
+
+  // Sync per-session unread counts from DB (authoritative source).
+  // Counts unread "message" notification rows per session_id and replaces
+  // the localStorage cache so badges survive reloads and cross-device gaps.
+  const dbUnread = new Map();
+  for (const n of state.notifications) {
+    if (n.kind === "message" && n.unread && n.session_id) {
+      dbUnread.set(n.session_id, (dbUnread.get(n.session_id) || 0) + 1);
+    }
+  }
+  // Replace local counts with DB counts; clear any session the DB says is read.
+  state.unreadBySession = dbUnread;
+  persistUnread();
+
   refreshBadges();
 }
 
