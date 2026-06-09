@@ -48,8 +48,9 @@ if not (SUPABASE_URL and SUPABASE_SERVICE_KEY and SUPABASE_JWT_SECRET):
 if not SUPABASE_ANON_KEY:
     print("[warn] SUPABASE_ANON_KEY not set — frontend config endpoint will fail.")
 
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-EMAIL_FROM     = os.environ.get("EMAIL_FROM", "NextDate <onboarding@resend.dev>")
+BREVO_API_KEY  = os.environ.get("BREVO_API_KEY", "")
+EMAIL_FROM     = os.environ.get("EMAIL_FROM", "nextdate.app@gmail.com")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "NextDate")
 APP_URL        = os.environ.get("APP_URL", "https://nextdate.pages.dev")
 
 RESET_TOKEN_TTL_SECONDS = 3600  # 1 hour
@@ -58,8 +59,8 @@ RESET_TOKEN_TTL_SECONDS = 3600  # 1 hour
 def send_reset_email(to_email: str, token: str) -> None:
     reset_url = f"{APP_URL}?token={token}"
 
-    if not RESEND_API_KEY:
-        print("[RESET] No RESEND_API_KEY set — use this link to reset manually:")
+    if not BREVO_API_KEY:
+        print("[RESET] No BREVO_API_KEY set — use this link to reset manually:")
         print(f"[RESET] {reset_url}")
         return
 
@@ -82,13 +83,19 @@ def send_reset_email(to_email: str, token: str) -> None:
 """
 
     resp = httpx.post(
-        "https://api.resend.com/emails",
-        headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-        json={"from": EMAIL_FROM, "to": [to_email], "subject": "Reset your NextDate password", "html": html, "text": text},
+        "https://api.brevo.com/v3/smtp/email",
+        headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
+        json={
+            "sender": {"name": EMAIL_FROM_NAME, "email": EMAIL_FROM},
+            "to": [{"email": to_email}],
+            "subject": "Reset your NextDate password",
+            "htmlContent": html,
+            "textContent": text,
+        },
         timeout=10,
     )
     if not resp.is_success:
-        print(f"[RESET] Resend {resp.status_code}: {resp.text}")
+        print(f"[RESET] Brevo {resp.status_code}: {resp.text}")
         resp.raise_for_status()
 
 def _build_admin_client() -> Optional[Client]:
