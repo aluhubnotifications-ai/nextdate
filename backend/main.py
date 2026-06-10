@@ -100,40 +100,39 @@ def send_reset_email(to_email: str, token: str) -> None:
         print(f"[RESET] Brevo {resp.status_code}: {resp.text}")
         resp.raise_for_status()
 
-def send_crush_email(to_email: str) -> None:
+def send_crush_email(to_email: str, sender_nickname: str) -> None:
     app_url = f"{APP_URL}?ref=secret_crush"
+    name = sender_nickname or "Someone"
 
     if not BREVO_API_KEY:
         print(f"[CRUSH] No BREVO_API_KEY set — invite would go to {to_email}: {app_url}")
         return
 
     text = (
-        "Someone has a secret crush on you.\n\n"
-        "We can't tell you who. But they're on NextDate, waiting to see if you show up.\n\n"
+        f"{name} has a secret crush on you.\n\n"
+        f"{name} found you on NextDate and sent you this — but their real identity stays hidden until you both match.\n\n"
         f"Join now: {app_url}\n\n"
-        "Identities stay hidden until you both decide to reveal. No pressure — just possibility.\n\n"
-        "Could be someone you already know."
+        "You could be thinking about the same person right now."
     )
     html = f"""
 <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:480px;margin:0 auto;background:#0f0a1a;color:#f0e6ff;border-radius:16px;overflow:hidden;">
   <div style="background:linear-gradient(135deg,#FF3D6E,#b02af0);padding:40px 32px 32px;text-align:center;">
     <div style="font-size:52px;margin-bottom:14px;">💌</div>
-    <h1 style="margin:0;font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.5px;line-height:1.3;">Someone has a secret crush on you</h1>
+    <h1 style="margin:0;font-size:28px;font-weight:800;color:#fff;letter-spacing:-0.5px;line-height:1.3;">{name} has a secret crush on you</h1>
   </div>
   <div style="padding:32px;line-height:1.75;">
-    <p style="font-size:18px;font-weight:700;margin:0 0 14px;color:#f0e6ff;">We can't tell you who.</p>
-    <p style="font-size:15px;color:#c9b8e8;margin:0 0 14px;">But someone real — someone who already knows you — quietly sent you this. They've been waiting to see if you'd show up.</p>
-    <p style="font-size:15px;color:#c9b8e8;margin:0 0 28px;">On <strong style="color:#ff6b9d;">NextDate</strong>, you match anonymously. Identities stay hidden until you <em>both</em> decide to reveal. No pressure. Just possibility.</p>
+    <p style="font-size:16px;color:#c9b8e8;margin:0 0 14px;"><strong style="color:#f0e6ff;">{name}</strong> found you on NextDate and quietly sent you this. Their real identity stays hidden &mdash; you&rsquo;ll only find out who they are once you match.</p>
+    <p style="font-size:15px;color:#c9b8e8;margin:0 0 28px;">On <strong style="color:#ff6b9d;">NextDate</strong>, everything is anonymous until you <em>both</em> decide to reveal. No awkward moments. Just a spark waiting to happen.</p>
     <div style="text-align:center;margin:0 0 28px;">
       <a href="{app_url}"
          style="display:inline-block;background:linear-gradient(135deg,#FF3D6E,#ff6b9d);color:#fff;padding:16px 40px;border-radius:50px;text-decoration:none;font-size:17px;font-weight:700;letter-spacing:0.3px;box-shadow:0 4px 24px rgba(255,61,110,0.45);">
-        See who it is &rarr;
+        Find out who {name} really is &rarr;
       </a>
     </div>
-    <p style="font-size:14px;color:#8a7ba0;text-align:center;margin:0;">Could be someone you've been thinking about too.<br>Only one way to find out.</p>
+    <p style="font-size:14px;color:#8a7ba0;text-align:center;margin:0;">You could be thinking about the same person right now.<br>Only one way to find out.</p>
   </div>
   <div style="padding:20px 32px;border-top:1px solid #2a1f3d;text-align:center;">
-    <p style="font-size:12px;color:#5a4f6e;margin:0;">NextDate &mdash; anonymous matchmaking.<br>You received this because someone sent you a secret invite.</p>
+    <p style="font-size:12px;color:#5a4f6e;margin:0;">NextDate &mdash; anonymous matchmaking.<br>You received this because {name} sent you a secret invite.</p>
   </div>
 </div>
 """
@@ -144,7 +143,7 @@ def send_crush_email(to_email: str) -> None:
         json={
             "sender": {"name": EMAIL_FROM_NAME, "email": EMAIL_FROM},
             "to": [{"email": to_email}],
-            "subject": "Someone has a secret crush on you 🔥",
+            "subject": f"{name} has a secret crush on you 🔥",
             "htmlContent": html,
             "textContent": text,
         },
@@ -598,11 +597,14 @@ def admin_delete_campaign(campaign_id: str, uid: str = Depends(caller_id), db: C
 def send_invite(body: InviteBody, uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
     invited_email = str(body.email).strip().lower()
 
-    # Block self-invite
+    # Fetch sender's email + nickname in one shot
     me_rows = db.table("users").select("email").eq("id", uid).limit(1).execute()
     my_email = (me_rows.data[0].get("email") or "").lower() if me_rows.data else ""
     if invited_email == my_email:
         raise HTTPException(status_code=400, detail="You can't send a crush to yourself.")
+
+    profile_rows = db.table("profiles").select("nickname").eq("id", uid).limit(1).execute()
+    sender_nickname = (profile_rows.data[0].get("nickname") or "Someone") if profile_rows.data else "Someone"
 
     # Rate-limit: 5 invites per rolling hour
     one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
@@ -616,7 +618,7 @@ def send_invite(body: InviteBody, uid: str = Depends(caller_id), db: Client = De
     }).execute()
 
     try:
-        send_crush_email(invited_email)
+        send_crush_email(invited_email, sender_nickname)
     except Exception as exc:
         print(f"[error] Crush email failed for {invited_email}: {exc}")
 
