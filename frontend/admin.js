@@ -337,7 +337,7 @@ function paintCampaigns(rows) {
   const totalUsers = allUsers.length || 1;
 
   for (const c of rows) {
-    const link    = `${location.origin}/index.html?ref=${encodeURIComponent(c.slug)}`;
+    const link    = `https://nextdate.pages.dev?ref=${encodeURIComponent(c.slug)}`;
     const signups = c.signups || 0;
     const pct     = Math.min(100, Math.round((signups / totalUsers) * 100));
 
