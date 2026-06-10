@@ -4037,7 +4037,7 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   background: var(--brand-soft);
   color: var(--brand-rose);
 }
-.adm-nav-icon { flex-shrink: 0; opacity: .75; }
+.adm-nav-icon { flex-shrink: 0; opacity: .75; width: 18px; height: 18px; }
 .adm-nav-item.active .adm-nav-icon { opacity: 1; }
 .adm-nav-badge {
   margin-left: auto;
