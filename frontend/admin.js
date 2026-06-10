@@ -1,8 +1,5 @@
 // NextDate — standalone admin portal.
-// Lives at /admin.html, separate from the main app. Reuses the same
-// backend (/auth/login, /admin/*) and the same admin-* CSS classes from
-// styles.css. Hard-fails any non-admin signin attempt so the dashboard
-// only ever renders to a confirmed admin.
+// Lives at /admin.html, separate from the main app.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
@@ -11,7 +8,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const BACKEND_URL       = "https://nextdate-5may.onrender.com";
 
 const ADMIN_TOKEN_KEY = "nd_admin_token";
-const ADMIN_USER_KEY  = "nd_admin_user";   // { id, email, nickname }
+const ADMIN_USER_KEY  = "nd_admin_user";
 
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -30,7 +27,7 @@ function toast(msg, ms = 2800) {
 }
 
 function fmtRelative(iso) {
-  if (!iso) return "";
+  if (!iso) return "—";
   const d = new Date(iso);
   const diff = (Date.now() - d.getTime()) / 1000;
   if (diff < 60)      return "just now";
@@ -38,6 +35,15 @@ function fmtRelative(iso) {
   if (diff < 86400)   return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 604800)  return `${Math.floor(diff / 86400)}d ago`;
   return d.toLocaleDateString();
+}
+
+// Avatar: renders photo (data: URL) or emoji safely.
+function adminAvatarHtml(url) {
+  if (!url) return "";
+  if (/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(url)) {
+    return `<img class="adm-av-photo" src="${escapeHtml(url)}" alt="" loading="lazy">`;
+  }
+  return `<span class="adm-av-emoji">${escapeHtml(url)}</span>`;
 }
 
 // ---------- session ----------
@@ -70,21 +76,13 @@ async function api(path, { method = "GET", body, auth = true } = {}) {
   return data;
 }
 
-// We use the supabase client to read the caller's own profile (to check
-// is_admin) right after a successful login. Anything beyond that goes
-// through /admin/* on the backend, which re-checks is_admin server-side.
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
 async function fetchSelfProfile(token, userId) {
-  // The supabase client doesn't inherit the bearer header from above, so
-  // pipe the admin's token through explicitly for this single call.
   const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,email,nickname,is_admin`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
   });
   const rows = await res.json().catch(() => []);
   return Array.isArray(rows) ? rows[0] : null;
@@ -109,17 +107,14 @@ function showDashboard(user) {
   revealPortal();
   $("#admin-login").classList.add("hidden");
   $("#admin-dash").classList.remove("hidden");
-  $("#admin-portal-as").textContent = `· signed in as ${user.nickname || user.email}`;
+  $("#admin-portal-as").textContent = user.nickname || user.email;
 }
 
 // ---------- login ----------
 async function doSignin() {
   const email = $("#admin-email").value.trim();
   const password = $("#admin-password").value;
-  if (!email || !password) {
-    showLogin("Enter email and password.");
-    return;
-  }
+  if (!email || !password) { showLogin("Enter email and password."); return; }
   const btn = $("#admin-signin");
   btn.disabled = true; btn.textContent = "Signing in…";
   try {
@@ -128,7 +123,7 @@ async function doSignin() {
     const profile = await fetchSelfProfile(res.token, res.user_id);
     if (!profile?.is_admin) {
       tokens.clear();
-      showLogin("This account isn't an admin.");
+      showLogin("This account doesn't have admin access.");
       return;
     }
     const user = { id: res.user_id, email: res.email, nickname: profile.nickname };
@@ -151,9 +146,24 @@ function doSignout() {
   $("#admin-portal-as").textContent = "";
 }
 
-// ---------- dashboard ----------
+// ---------- data ----------
 let allUsers = [];
+let allReportsAll = [];   // unfiltered — for stats only
 
+function updateStats() {
+  const total    = allUsers.length;
+  const withProf = allUsers.filter((u) => u.has_profile).length;
+  const admins   = allUsers.filter((u) => u.is_admin).length;
+  const openRep  = allReportsAll.filter((r) => r.status === "open").length;
+  const pct      = total ? Math.round((withProf / total) * 100) : 0;
+  const s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  s("stat-total",      total);
+  s("stat-profiles",   `${withProf} (${pct}%)`);
+  s("stat-open",       openRep);
+  s("stat-admins-val", admins);
+}
+
+// ---------- users pane ----------
 function paintUsers(filter = "") {
   const list = $("#admin-users-list");
   const q = filter.trim().toLowerCase();
@@ -165,69 +175,82 @@ function paintUsers(filter = "") {
     ].filter(Boolean).join(" ").toLowerCase();
     return hay.includes(q);
   });
+
   list.innerHTML = "";
+
   for (const u of visible) {
-    const priv = u.private || {};
-    const prefs = u.prefs || {};
-    const tagBits = [
-      ...(prefs.interests || []).slice(0, 4),
-      ...(prefs.hobbies || []).slice(0, 3),
-    ].map((t) => `<span class="admin-tag">${escapeHtml(t)}</span>`).join("");
+    const priv  = u.private || {};
+    const prefs = u.prefs   || {};
 
-    const adminPill    = u.is_admin    ? `<span class="admin-pill">ADMIN</span>` : "";
-    const incompletePill = !u.has_profile ? `<span class="admin-pill incomplete">NO PROFILE</span>` : "";
-    const refPill      = u.ref_campaign ? `<span class="admin-pill ref">via ${escapeHtml(u.ref_campaign)}</span>` : "";
+    const initials = (u.nickname || u.email || "?")[0].toUpperCase();
+    const avatarHtml = u.avatar_url
+      ? adminAvatarHtml(u.avatar_url)
+      : `<span class="adm-av-init">${escapeHtml(initials)}</span>`;
 
-    // Show first letter of email as avatar fallback when no emoji set
-    const avatarContent = u.avatar_url
-      ? escapeHtml(u.avatar_url)
-      : `<span class="admin-avatar-init">${escapeHtml((u.nickname || u.email || "?")[0].toUpperCase())}</span>`;
+    const tags = [
+      ...(prefs.interests || []).slice(0, 3),
+      ...(prefs.hobbies   || []).slice(0, 2),
+    ].map((t) => `<span class="adm-tag">${escapeHtml(t)}</span>`).join("");
+
+    const pills = [
+      u.is_admin     ? `<span class="adm-pill adm-pill--admin">ADMIN</span>` : "",
+      !u.has_profile ? `<span class="adm-pill adm-pill--muted">NO PROFILE</span>` : "",
+      u.ref_campaign ? `<span class="adm-pill adm-pill--ref">via ${escapeHtml(u.ref_campaign)}</span>` : "",
+    ].join("");
 
     const card = document.createElement("div");
-    card.className = "admin-user-card";
+    card.className = "adm-user-card";
     card.innerHTML = `
-      <div class="admin-user-head">
-        <div class="admin-avatar">${avatarContent}</div>
-        <div class="admin-user-meta">
-          <div class="admin-user-name">${escapeHtml(u.nickname || u.email.split("@")[0])} ${adminPill}${incompletePill}${refPill}</div>
-          <div class="admin-user-sub">${escapeHtml(u.email)} · ${escapeHtml(u.gender || "—")} · ${escapeHtml(u.zodiac_sign || "—")}</div>
+      <div class="adm-user-row">
+        <div class="adm-av">${avatarHtml}</div>
+        <div class="adm-user-info">
+          <div class="adm-user-name">${escapeHtml(u.nickname || u.email.split("@")[0])} ${pills}</div>
+          <div class="adm-user-email">${escapeHtml(u.email)}</div>
         </div>
-        <div class="admin-user-actions">
-          <button class="btn danger small admin-delete" type="button" data-id="${escapeHtml(u.id)}" ${u.is_admin ? "disabled title=\"Remove from admin allowlist first\"" : ""}>Delete</button>
+        <div class="adm-user-meta-right">
+          <div class="adm-user-joined">${escapeHtml(fmtRelative(u.created_at))}</div>
+          <div class="adm-user-gender">${escapeHtml(u.gender || "—")} · ${escapeHtml(u.zodiac_sign || "—")}</div>
         </div>
+        <button class="btn danger small adm-delete-btn" type="button"
+          data-id="${escapeHtml(u.id)}"
+          ${u.is_admin ? "disabled title=\"Remove from admin allowlist first\"" : ""}>
+          Delete
+        </button>
+        <button class="adm-expand-btn" type="button" aria-label="Toggle details">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
       </div>
-      <div class="admin-user-body">
-        <div class="admin-info-grid">
-          <div class="admin-row"><span class="admin-label">Real name</span><span>${escapeHtml(priv.real_name || "—")}</span></div>
-          <div class="admin-row"><span class="admin-label">Age</span><span>${escapeHtml(String(priv.age || "—"))}</span></div>
-          <div class="admin-row"><span class="admin-label">Country</span><span>${escapeHtml(priv.country || "—")}</span></div>
-          <div class="admin-row"><span class="admin-label">Cohort</span><span>${escapeHtml(priv.cohort || "—")}</span></div>
-          <div class="admin-row"><span class="admin-label">Looking for</span><span>${escapeHtml(prefs.target_intent || "—")} · ${escapeHtml(prefs.term_length || "—")}</span></div>
-          <div class="admin-row"><span class="admin-label">Joined</span><span>${escapeHtml(fmtRelative(u.created_at))}</span></div>
+      <div class="adm-user-detail hidden">
+        <div class="adm-detail-grid">
+          <div class="adm-detail-row"><span class="adm-detail-label">Real name</span><span>${escapeHtml(priv.real_name || "—")}</span></div>
+          <div class="adm-detail-row"><span class="adm-detail-label">Age</span><span>${escapeHtml(String(priv.age || "—"))}</span></div>
+          <div class="adm-detail-row"><span class="adm-detail-label">Country</span><span>${escapeHtml(priv.country || "—")}</span></div>
+          <div class="adm-detail-row"><span class="adm-detail-label">Cohort</span><span>${escapeHtml(priv.cohort || "—")}</span></div>
+          <div class="adm-detail-row"><span class="adm-detail-label">Looking for</span><span>${escapeHtml(prefs.target_intent || "—")} · ${escapeHtml(prefs.term_length || "—")}</span></div>
+          <div class="adm-detail-row"><span class="adm-detail-label">Campaign</span><span>${escapeHtml(u.ref_campaign || "—")}</span></div>
         </div>
-        ${tagBits ? `<div class="admin-tags">${tagBits}</div>` : ""}
+        ${tags ? `<div class="adm-tags">${tags}</div>` : ""}
       </div>`;
+
+    // expand/collapse
+    card.querySelector(".adm-expand-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const detail = card.querySelector(".adm-user-detail");
+      const btn    = card.querySelector(".adm-expand-btn");
+      const open   = !detail.classList.contains("hidden");
+      detail.classList.toggle("hidden", open);
+      btn.classList.toggle("expanded", !open);
+    });
+
     list.appendChild(card);
   }
+
   if (!visible.length) {
-    list.innerHTML = `<div class="admin-empty">No users match.</div>`;
+    list.innerHTML = `<div class="adm-empty">No users match.</div>`;
   }
 }
 
-let allReportsAll = [];   // unfiltered — used only for stats
-
-function updateStats() {
-  const total    = allUsers.length;
-  const withProf = allUsers.filter((u) => u.has_profile).length;
-  const admins   = allUsers.filter((u) => u.is_admin).length;
-  const openRep  = allReportsAll.filter((r) => r.status === "open").length;
-  const s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  s("stat-total",      total);
-  s("stat-profiles",   withProf);
-  s("stat-open",       openRep);
-  s("stat-admins-val", admins);
-}
-
+// ---------- reports pane ----------
 function paintReports(rows) {
   const list = $("#admin-reports-list");
   $("#admin-reports-count").textContent = rows.length;
@@ -235,20 +258,20 @@ function paintReports(rows) {
   for (const r of rows) {
     const reporter = r.reporter?.nickname || r.reporter?.email || (r.reporter_id || "").slice(0, 8);
     const reported = r.reported?.nickname || r.reported?.email || (r.reported_id || "").slice(0, 8);
-    const statusClass = r.status === "open" ? "open" : r.status === "resolved" ? "resolved" : "dismissed";
+    const statusCls = r.status === "open" ? "open" : r.status === "resolved" ? "resolved" : "dismissed";
     const card = document.createElement("div");
-    card.className = "admin-report-card";
+    card.className = "adm-report-card";
     card.innerHTML = `
-      <div class="admin-report-head">
-        <span class="admin-report-status ${statusClass}">${escapeHtml(r.status)}</span>
-        <span class="admin-report-reason">${escapeHtml(r.reason || "—")}</span>
-        <span class="admin-report-time muted">${escapeHtml(fmtRelative(r.created_at))}</span>
+      <div class="adm-report-head">
+        <span class="adm-status adm-status--${statusCls}">${escapeHtml(r.status)}</span>
+        <span class="adm-report-reason">${escapeHtml(r.reason || "—")}</span>
+        <span class="adm-report-time">${escapeHtml(fmtRelative(r.created_at))}</span>
       </div>
-      <div class="admin-report-body">
-        <div><b>${escapeHtml(reporter)}</b> reported <b>${escapeHtml(reported)}</b></div>
-        ${r.details ? `<div class="admin-report-details">"${escapeHtml(r.details)}"</div>` : ""}
+      <div class="adm-report-body">
+        <b>${escapeHtml(reporter)}</b> reported <b>${escapeHtml(reported)}</b>
+        ${r.details ? `<div class="adm-report-quote">"${escapeHtml(r.details)}"</div>` : ""}
       </div>
-      <div class="admin-report-actions">
+      <div class="adm-report-actions">
         ${r.status === "open" ? `
           <button class="btn small admin-resolve" data-id="${escapeHtml(r.id)}" data-status="resolved">Resolve</button>
           <button class="btn ghost small admin-resolve" data-id="${escapeHtml(r.id)}" data-status="dismissed">Dismiss</button>` : `
@@ -257,10 +280,82 @@ function paintReports(rows) {
     list.appendChild(card);
   }
   if (!rows.length) {
-    list.innerHTML = `<div class="admin-empty">Nothing here.</div>`;
+    list.innerHTML = `<div class="adm-empty">Nothing here.</div>`;
   }
 }
 
+// ---------- campaigns pane ----------
+function paintCampaigns(rows) {
+  const cntEl = $("#admin-campaigns-count");
+  if (cntEl) cntEl.textContent = rows.length;
+  const list = $("#admin-campaigns-list");
+  list.innerHTML = "";
+  if (!rows.length) {
+    list.innerHTML = `<div class="adm-empty">No campaigns yet. Create one above to get a referral link.</div>`;
+    return;
+  }
+
+  const totalUsers = allUsers.length || 1;
+
+  for (const c of rows) {
+    const link    = `${location.origin}/index.html?ref=${encodeURIComponent(c.slug)}`;
+    const signups = c.signups || 0;
+    const pct     = Math.min(100, Math.round((signups / totalUsers) * 100));
+
+    const card = document.createElement("div");
+    card.className = "adm-campaign-card";
+    card.innerHTML = `
+      <div class="adm-campaign-top">
+        <div class="adm-campaign-info">
+          <div class="adm-campaign-name">${escapeHtml(c.name)}</div>
+          <div class="adm-campaign-slug">
+            <code>${escapeHtml(c.slug)}</code>
+          </div>
+        </div>
+        <div class="adm-campaign-count">
+          <span class="adm-campaign-num">${signups}</span>
+          <span class="adm-campaign-label">sign-up${signups !== 1 ? "s" : ""}</span>
+        </div>
+        <div class="adm-campaign-btns">
+          <button class="btn ghost small campaign-copy" type="button" data-link="${escapeHtml(link)}">Copy link</button>
+          <button class="btn danger small campaign-delete" type="button" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">Delete</button>
+        </div>
+      </div>
+      <div class="adm-campaign-bar-wrap">
+        <div class="adm-campaign-bar" style="width:${pct}%"></div>
+      </div>
+      <div class="adm-campaign-link">
+        <span class="adm-campaign-link-text">${escapeHtml(link)}</span>
+        <span class="adm-campaign-pct">${pct}% of all users</span>
+      </div>`;
+    list.appendChild(card);
+  }
+}
+
+// ---------- admin emails pane ----------
+function paintEmails(rows) {
+  const list = $("#admin-emails-list");
+  $("#admin-admins-count").textContent = rows.length;
+  list.innerHTML = "";
+  const meEmail = (cachedUser.get()?.email || "").toLowerCase();
+  for (const r of rows) {
+    const isMe = r.email.toLowerCase() === meEmail;
+    const card = document.createElement("div");
+    card.className = "adm-email-row";
+    card.innerHTML = `
+      <div class="adm-email-meta">
+        <div class="adm-email-addr">${escapeHtml(r.email)} ${isMe ? '<span class="adm-pill adm-pill--admin">YOU</span>' : ""}</div>
+        <div class="adm-email-when">added ${escapeHtml(fmtRelative(r.added_at))}</div>
+      </div>
+      <button class="btn danger small admin-email-remove" data-email="${escapeHtml(r.email)}" ${isMe ? "disabled title=\"You can't remove your own email\"" : ""}>Remove</button>`;
+    list.appendChild(card);
+  }
+  if (!rows.length) {
+    list.innerHTML = `<div class="adm-empty">No admin emails yet.</div>`;
+  }
+}
+
+// ---------- loaders ----------
 async function loadUsers() {
   try {
     allUsers = await api("/admin/users");
@@ -269,7 +364,7 @@ async function loadUsers() {
     updateStats();
   } catch (err) {
     toast(err.message);
-    $("#admin-users-list").innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
+    $("#admin-users-list").innerHTML = `<div class="adm-empty">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -281,70 +376,7 @@ async function loadReports() {
     paintReports(rows);
   } catch (err) {
     toast(err.message);
-    $("#admin-reports-list").innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
-  }
-}
-
-function paintEmails(rows) {
-  const list = $("#admin-emails-list");
-  $("#admin-admins-count").textContent = rows.length;
-  list.innerHTML = "";
-  const meEmail = (cachedUser.get()?.email || "").toLowerCase();
-  for (const r of rows) {
-    const isMe = r.email.toLowerCase() === meEmail;
-    const card = document.createElement("div");
-    card.className = "admin-email-row";
-    card.innerHTML = `
-      <div class="admin-email-meta">
-        <div class="admin-email-addr">${escapeHtml(r.email)} ${isMe ? '<span class="admin-pill">YOU</span>' : ""}</div>
-        <div class="admin-email-sub muted">added ${escapeHtml(fmtRelative(r.added_at))}</div>
-      </div>
-      <button class="btn danger small admin-email-remove" data-email="${escapeHtml(r.email)}" ${isMe ? "disabled title=\"You can't remove your own email\"" : ""}>Remove</button>`;
-    list.appendChild(card);
-  }
-  if (!rows.length) {
-    list.innerHTML = `<div class="admin-empty">No admin emails yet.</div>`;
-  }
-}
-
-async function loadEmails() {
-  try {
-    const rows = await api("/admin/emails");
-    paintEmails(rows);
-  } catch (err) {
-    toast(err.message);
-    $("#admin-emails-list").innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
-  }
-}
-
-// ---------- campaigns ----------
-function paintCampaigns(rows) {
-  const list = $("#admin-campaigns-list");
-  const cntEl = $("#admin-campaigns-count");
-  if (cntEl) cntEl.textContent = rows.length;
-  list.innerHTML = "";
-  if (!rows.length) {
-    list.innerHTML = `<div class="admin-empty">No campaigns yet. Create one above.</div>`;
-    return;
-  }
-  for (const c of rows) {
-    const link = `${location.origin}/?ref=${encodeURIComponent(c.slug)}`;
-    const card = document.createElement("div");
-    card.className = "admin-campaign-card";
-    card.innerHTML = `
-      <div class="admin-campaign-head">
-        <div class="admin-campaign-info">
-          <div class="admin-campaign-name">${escapeHtml(c.name)}</div>
-          <div class="admin-campaign-slug muted">${escapeHtml(c.slug)}</div>
-        </div>
-        <div class="admin-campaign-signups">${c.signups} sign-up${c.signups !== 1 ? "s" : ""}</div>
-        <div class="admin-campaign-actions">
-          <button class="btn ghost small campaign-copy" type="button" data-link="${escapeHtml(link)}">Copy link</button>
-          <button class="btn danger small campaign-delete" type="button" data-id="${escapeHtml(c.id)}" data-name="${escapeHtml(c.name)}">Delete</button>
-        </div>
-      </div>
-      <div class="admin-campaign-link muted">${escapeHtml(link)}</div>`;
-    list.appendChild(card);
+    $("#admin-reports-list").innerHTML = `<div class="adm-empty">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -354,13 +386,21 @@ async function loadCampaigns() {
     paintCampaigns(rows);
   } catch (err) {
     toast(err.message);
-    $("#admin-campaigns-list").innerHTML = `<div class="admin-empty">${escapeHtml(err.message)}</div>`;
+    $("#admin-campaigns-list").innerHTML = `<div class="adm-empty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function loadEmails() {
+  try {
+    const rows = await api("/admin/emails");
+    paintEmails(rows);
+  } catch (err) {
+    toast(err.message);
+    $("#admin-emails-list").innerHTML = `<div class="adm-empty">${escapeHtml(err.message)}</div>`;
   }
 }
 
 async function renderDashboard() {
-  // Pre-fetch all reports (unfiltered) so the stats bar always shows
-  // accurate open-report count regardless of the filter selection.
   try { allReportsAll = await api("/admin/reports"); } catch { allReportsAll = []; }
   await Promise.all([loadUsers(), loadReports(), loadEmails(), loadCampaigns()]);
 }
@@ -368,10 +408,9 @@ async function renderDashboard() {
 // ---------- wiring ----------
 function wire() {
   $("#admin-signin").addEventListener("click", doSignin);
-  $("#admin-password").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doSignin();
-  });
+  $("#admin-password").addEventListener("keydown", (e) => { if (e.key === "Enter") doSignin(); });
   $("#admin-signout").addEventListener("click", doSignout);
+
   $("#admin-refresh").addEventListener("click", async () => {
     const btn = $("#admin-refresh");
     btn.disabled = true;
@@ -380,20 +419,50 @@ function wire() {
     toast("Refreshed.");
   });
 
-  $$(".admin-tab").forEach((t) => t.addEventListener("click", () => {
-    const which = t.dataset.tab;
-    $$(".admin-tab").forEach((x) => {
-      const on = x.dataset.tab === which;
-      x.classList.toggle("active", on);
-      x.setAttribute("aria-selected", String(on));
-    });
-    $$(".admin-pane").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== which));
+  // Sidebar nav + tab switching
+  $$(".adm-nav-item").forEach((btn) => btn.addEventListener("click", () => {
+    const which = btn.dataset.tab;
+    $$(".adm-nav-item").forEach((x) => x.classList.toggle("active", x.dataset.tab === which));
+    $$(".adm-pane").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== which));
   }));
 
   $("#admin-user-search").addEventListener("input", (e) => paintUsers(e.target.value));
   $("#admin-report-filter").addEventListener("change", loadReports);
 
-  // campaigns — create
+  // Delete user
+  $("#admin-users-list").addEventListener("click", async (e) => {
+    const del = e.target.closest(".adm-delete-btn");
+    if (!del) return;
+    const id     = del.dataset.id;
+    const target = allUsers.find((u) => u.id === id);
+    const label  = target?.nickname || target?.email || id.slice(0, 8);
+    if (!window.confirm(`Delete ${label}? This wipes their profile, matches, and messages.`)) return;
+    del.disabled = true;
+    try {
+      await api(`/admin/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+      allUsers = allUsers.filter((u) => u.id !== id);
+      $("#admin-users-count").textContent = allUsers.length;
+      paintUsers($("#admin-user-search").value || "");
+      updateStats();
+      toast(`Deleted ${label}.`);
+    } catch (err) { toast(err.message); del.disabled = false; }
+  });
+
+  // Resolve/dismiss report
+  $("#admin-reports-list").addEventListener("click", async (e) => {
+    const btn = e.target.closest(".admin-resolve");
+    if (!btn) return;
+    btn.disabled = true;
+    try {
+      await api(`/admin/reports/${encodeURIComponent(btn.dataset.id)}/resolve`, {
+        method: "POST", body: { status: btn.dataset.status },
+      });
+      await loadReports();
+    } catch (err) { toast(err.message); }
+    finally { btn.disabled = false; }
+  });
+
+  // Campaign create
   $("#campaign-name").addEventListener("input", () => {
     const slugEl = $("#campaign-slug");
     if (!slugEl.dataset.edited) {
@@ -423,7 +492,7 @@ function wire() {
   });
   $("#campaign-name").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#btn-campaign-create").click(); });
 
-  // campaigns — copy link / delete
+  // Campaign copy/delete
   $("#admin-campaigns-list").addEventListener("click", async (e) => {
     const copyBtn = e.target.closest(".campaign-copy");
     if (copyBtn) {
@@ -443,6 +512,7 @@ function wire() {
     } catch (err) { toast(err.message); delBtn.disabled = false; }
   });
 
+  // Admin emails
   $("#admin-add-email").addEventListener("click", async () => {
     const input = $("#admin-new-email");
     const email = (input.value || "").trim().toLowerCase();
@@ -457,15 +527,13 @@ function wire() {
     } catch (err) { toast(err.message); }
     finally { btn.disabled = false; }
   });
-  $("#admin-new-email").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") $("#admin-add-email").click();
-  });
+  $("#admin-new-email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#admin-add-email").click(); });
 
   $("#admin-emails-list").addEventListener("click", async (e) => {
     const btn = e.target.closest(".admin-email-remove");
     if (!btn) return;
     const email = btn.dataset.email;
-    if (!window.confirm(`Remove ${email} from the admin allowlist? If they have an account, their admin access is revoked immediately.`)) return;
+    if (!window.confirm(`Remove ${email} from the admin allowlist?`)) return;
     btn.disabled = true;
     try {
       await api(`/admin/emails/${encodeURIComponent(email)}`, { method: "DELETE" });
@@ -473,47 +541,14 @@ function wire() {
       toast(`Removed ${email}.`);
     } catch (err) { toast(err.message); btn.disabled = false; }
   });
-
-  $("#admin-users-list").addEventListener("click", async (e) => {
-    const del = e.target.closest(".admin-delete");
-    if (!del) return;
-    const id = del.dataset.id;
-    const target = allUsers.find((u) => u.id === id);
-    const label = target?.nickname || target?.email || id.slice(0, 8);
-    if (!window.confirm(`Delete ${label}? This wipes their profile, matches, and messages. Cannot be undone.`)) return;
-    del.disabled = true;
-    try {
-      await api(`/admin/users/${encodeURIComponent(id)}`, { method: "DELETE" });
-      allUsers = allUsers.filter((u) => u.id !== id);
-      $("#admin-users-count").textContent = allUsers.length;
-      paintUsers($("#admin-user-search").value || "");
-      toast(`Deleted ${label}.`);
-    } catch (err) { toast(err.message); del.disabled = false; }
-  });
-
-  $("#admin-reports-list").addEventListener("click", async (e) => {
-    const btn = e.target.closest(".admin-resolve");
-    if (!btn) return;
-    btn.disabled = true;
-    try {
-      await api(`/admin/reports/${encodeURIComponent(btn.dataset.id)}/resolve`, {
-        method: "POST", body: { status: btn.dataset.status },
-      });
-      await loadReports();
-    } catch (err) { toast(err.message); }
-    finally { btn.disabled = false; }
-  });
 }
 
 // ---------- bootstrap ----------
 (async function init() {
   wire();
-  const token = tokens.get();
+  const token  = tokens.get();
   const cached = cachedUser.get();
   if (token && cached) {
-    // Re-verify the stashed session is still an admin before unlocking
-    // the dashboard — token could have been revoked, or admin flag taken
-    // away by another admin.
     try {
       const profile = await fetchSelfProfile(token, cached.id);
       if (profile?.is_admin) {
@@ -521,7 +556,7 @@ function wire() {
         await renderDashboard();
         return;
       }
-    } catch { /* fall through to login */ }
+    } catch { /* fall through */ }
     tokens.clear();
   }
   showLogin("");
