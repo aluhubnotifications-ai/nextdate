@@ -1,11 +1,54 @@
 // NextDate — standalone admin portal.
 // Lives at /admin.html, separate from the main app.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+// Only BACKEND_URL is hardcoded. SUPABASE_URL and SUPABASE_ANON_KEY are
+// fetched from the backend /config endpoint (which reads Render env vars).
+const BACKEND_URL = "https://nextdate-5may.onrender.com";
+let SUPABASE_URL      = "";
+let SUPABASE_ANON_KEY = "";
 
-const SUPABASE_URL      = "https://wkdamyjswlixzkwehxyc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZGFteWpzd2xpeHprd2VoeHljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMzgyNTksImV4cCI6MjA5NTkxNDI1OX0.8CuPl4ZhLwZ2MPW6DUnuRNcZKQyzpw-SLdg6C8KYxcg";
-const BACKEND_URL       = "https://nextdate-5may.onrender.com";
+const ADMIN_CONFIG_CACHE_KEY = "nd_admin_config_v1";
+
+async function loadConfig() {
+  try {
+    const raw = localStorage.getItem(ADMIN_CONFIG_CACHE_KEY);
+    if (raw) {
+      const cached = JSON.parse(raw);
+      if (cached?.supabase_url && cached?.supabase_anon_key) {
+        SUPABASE_URL      = cached.supabase_url;
+        SUPABASE_ANON_KEY = cached.supabase_anon_key;
+        // Refresh cache in background — don't block boot on Render cold start.
+        fetch(`${BACKEND_URL}/config`, { method: "GET", mode: "cors" })
+          .then((r) => r.ok ? r.json() : null)
+          .then((cfg) => {
+            if (!cfg?.supabase_url || !cfg?.supabase_anon_key) return;
+            const next = { supabase_url: cfg.supabase_url, supabase_anon_key: cfg.supabase_anon_key };
+            const prev = localStorage.getItem(ADMIN_CONFIG_CACHE_KEY);
+            if (prev !== JSON.stringify(next))
+              try { localStorage.setItem(ADMIN_CONFIG_CACHE_KEY, JSON.stringify(next)); } catch {}
+          })
+          .catch(() => {});
+        return;
+      }
+    }
+  } catch { /* corrupted cache, fall through */ }
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/config`, { method: "GET", mode: "cors" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const cfg = await res.json();
+    SUPABASE_URL      = cfg.supabase_url      || "";
+    SUPABASE_ANON_KEY = cfg.supabase_anon_key || "";
+    try {
+      localStorage.setItem(ADMIN_CONFIG_CACHE_KEY, JSON.stringify({
+        supabase_url: SUPABASE_URL, supabase_anon_key: SUPABASE_ANON_KEY,
+      }));
+    } catch {}
+  } catch (e) {
+    console.warn("[admin] Failed to load /config:", e.message);
+  }
+}
+
 
 const ADMIN_TOKEN_KEY = "nd_admin_token";
 const ADMIN_USER_KEY  = "nd_admin_user";
@@ -75,10 +118,6 @@ async function api(path, { method = "GET", body, auth = true } = {}) {
   }
   return data;
 }
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
 
 async function fetchSelfProfile(token, userId) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,email,nickname,is_admin`, {
@@ -545,6 +584,7 @@ function wire() {
 
 // ---------- bootstrap ----------
 (async function init() {
+  await loadConfig();
   wire();
   const token  = tokens.get();
   const cached = cachedUser.get();
