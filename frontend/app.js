@@ -589,6 +589,7 @@ const views = {
   discover: renderDiscover,
   chats: renderChats,
   matches: renderMatches,
+  likes: renderLikes,
   notifications: renderNotifications,
   profile: renderProfile,
   admin: renderAdmin,
@@ -2296,6 +2297,75 @@ async function renderMatches(root) {
     };
     grid.appendChild(tile);
   }
+}
+
+// ---------- LIKES (blurred likers) ----------
+async function renderLikes(root) {
+  root.append($("#tpl-likes").content.cloneNode(true));
+  const grid = $("#likes-grid");
+  const me = state.user?.id || DEMO_ME.id;
+
+  let likers = [];
+
+  if (DEMO_MODE) {
+    const matchedIds = new Set(
+      DEMO_SESSIONS.flatMap((s) => [s.user_a, s.user_b]).filter((id) => id !== DEMO_ME.id)
+    );
+    likers = DEMO_USERS.filter((u) => !matchedIds.has(u.user_id));
+  } else {
+    progressStart();
+    try {
+      const [{ data: likeRows, error: le }, { data: sessions }] = await Promise.all([
+        supabase.from("likes").select("liker").eq("likee", me),
+        supabase.from("chat_sessions").select("user_a, user_b"),
+      ]);
+      if (le) throw le;
+      const matchedIds = new Set(
+        (sessions || []).flatMap((s) => [s.user_a, s.user_b]).filter((id) => id !== me)
+      );
+      likers = (likeRows || []).map((r) => ({ user_id: r.liker })).filter((u) => !matchedIds.has(u.user_id));
+    } catch (err) {
+      grid.innerHTML = `<div class="empty">Couldn't load likes.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
+      document.getElementById("likes-upsell")?.remove();
+      return;
+    } finally { progressEnd(); }
+  }
+
+  if (!likers.length) {
+    grid.innerHTML = `
+      <div class="matches-empty">
+        <div class="matches-empty-emoji">👀</div>
+        <h3>No likes yet</h3>
+        <p>Keep swiping in Discover — someone will like you back soon!</p>
+        <button class="btn" id="go-discover-likes-empty">Find people</button>
+      </div>`;
+    document.getElementById("go-discover-likes-empty")?.addEventListener("click", () => navigate("discover"));
+    document.getElementById("likes-upsell")?.remove();
+    return;
+  }
+
+  const countLabel = document.getElementById("likes-count-label");
+  if (countLabel) {
+    countLabel.textContent = likers.length === 1 ? "1 person likes you!" : `${likers.length} people like you!`;
+  }
+
+  for (const u of likers) {
+    const tile = document.createElement("div");
+    tile.className = "liker-tile";
+    tile.innerHTML = `
+      <div class="liker-avatar">${avatarInnerHtml(u.avatar_url || "🧑")}</div>
+      <div class="liker-name">${escapeHtml(u.nickname || "Someone")}</div>
+      <div class="liker-meta">${[u.gender, u.zodiac_sign].filter(Boolean).map(escapeHtml).join(" • ") || "—"}</div>
+    `;
+    grid.appendChild(tile);
+  }
+
+  document.getElementById("go-discover-from-likes")?.addEventListener("click", () => navigate("discover"));
+  document.getElementById("invite-to-reveal")?.addEventListener("click", () => {
+    navigator.clipboard?.writeText(location.origin + location.pathname).then(() => {
+      toast("💌 Invite link copied! Share with 3 friends to reveal a like.");
+    }).catch(() => toast("Share the app link with 3 friends to reveal a like!"));
+  });
 }
 
 // ---------- CHATS ----------

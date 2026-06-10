@@ -85,6 +85,11 @@
           <span class="nav-label">Matches</span>
           <span class="nav-badge hidden" id="nav-matches-badge">0</span>
         </button>
+        <button data-view="likes" class="hidden" title="Likes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="nav-label">Likes</span>
+          <span class="nav-badge hidden" id="nav-likes-badge">0</span>
+        </button>
         <button data-view="notifications" class="hidden" title="Notifications">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
           <span class="nav-label">Notifications</span>
@@ -159,6 +164,11 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-4.35-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.65-7 10-7 10z"/></svg>
           <span class="bt-badge hidden" id="bt-matches-badge">0</span>
           <span>Matches</span>
+        </button>
+        <button data-view="likes" class="bottom-tab" title="Likes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="bt-badge hidden" id="bt-likes-badge">0</span>
+          <span>Likes</span>
         </button>
         <button data-view="profile" class="bottom-tab" title="Profile">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -685,6 +695,30 @@
         </div>
       </div>
       <div id="matches-grid" class="matches-grid"></div>
+    </section>
+  </template>
+
+  <template id="tpl-likes">
+    <section>
+      <div class="view-header">
+        <div>
+          <h2>👀 Likes</h2>
+          <div class="muted">People who liked your profile — match in Discover to reveal who they are.</div>
+        </div>
+      </div>
+      <div class="likes-wrapper">
+        <div id="likes-grid" class="likes-grid"></div>
+        <div class="likes-upsell" id="likes-upsell">
+          <div class="likes-upsell-inner">
+            <div class="likes-upsell-emoji">💘</div>
+            <h3 id="likes-count-label">Someone likes you!</h3>
+            <p>Swipe right on profiles in Discover — when they match you back, their identity is revealed.</p>
+            <button class="btn" id="go-discover-from-likes">Match with them in Discover to reveal!</button>
+            <div class="likes-divider">or</div>
+            <button class="btn ghost" id="invite-to-reveal">Invite 3 friends to reveal 1 like 💌</button>
+          </div>
+        </div>
+      </div>
     </section>
   </template>
 
