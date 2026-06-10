@@ -132,3 +132,7 @@ class SuggestionResponse(BaseModel):
     interests: List[str] = Field(default_factory=list)
     hobbies: List[str] = Field(default_factory=list)
     score: float = 0.0
+
+
+class InviteBody(BaseModel):
+    email: EmailStr

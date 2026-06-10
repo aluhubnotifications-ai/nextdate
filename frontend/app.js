@@ -1838,6 +1838,7 @@ function makeTagInput(container, initial) {
 async function renderDiscover(root) {
   root.append($("#tpl-discover").content.cloneNode(true));
   $("#refresh-discover").onclick = () => { state.deck = null; state.deckIndex = 0; loadDiscover(); };
+  $("#secret-crush-btn").onclick = () => openCrushModal();
   // Fresh-enough check: if the realtime profiles subscription flagged
   // the deck stale, or it's older than ~2 min, drop it so loadDiscover
   // refetches. Mid-swipe sessions (deck still populated and recent)
@@ -2426,6 +2427,13 @@ function wireGlobalModals() {
     if (e.target.id === "report-modal") closeReportModal();
   });
   $("#report-submit")?.addEventListener("click", submitReport);
+  $("#crush-modal-close")?.addEventListener("click", closeCrushModal);
+  $("#crush-cancel")?.addEventListener("click", closeCrushModal);
+  $("#crush-modal")?.addEventListener("click", (e) => {
+    if (e.target.id === "crush-modal") closeCrushModal();
+  });
+  $("#crush-send")?.addEventListener("click", submitCrush);
+  $("#crush-email")?.addEventListener("keydown", (e) => { if (e.key === "Enter") submitCrush(); });
   $("#terms-modal-close")?.addEventListener("click", closeTermsModal);
   $("#terms-modal-ok")?.addEventListener("click", closeTermsModal);
   $("#terms-modal")?.addEventListener("click", (e) => {
@@ -2436,6 +2444,7 @@ function wireGlobalModals() {
     closeEmojiModal();
     closeConfirmModal();
     closeReportModal();
+    closeCrushModal();
     closeTermsModal();
     closeInfoPanel();
   });
@@ -2652,6 +2661,42 @@ function closeReportModal() {
   const m = $("#report-modal");
   m?.classList.add("hidden");
   m?.setAttribute("aria-hidden", "true");
+}
+
+// ---------- crush modal ----------
+function openCrushModal() {
+  const m = $("#crush-modal");
+  if (!m) return;
+  $("#crush-email").value = "";
+  m.classList.remove("hidden");
+  m.setAttribute("aria-hidden", "false");
+  setTimeout(() => $("#crush-email")?.focus(), 80);
+}
+function closeCrushModal() {
+  const m = $("#crush-modal");
+  m?.classList.add("hidden");
+  m?.setAttribute("aria-hidden", "true");
+}
+async function submitCrush() {
+  const email = $("#crush-email")?.value.trim();
+  if (!email) return toast("Enter their email address.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast("Enter a valid email address.");
+  if (DEMO_MODE) {
+    closeCrushModal();
+    toast("💌 Crush sent! They have no idea it's you.");
+    return;
+  }
+  const btn = $("#crush-send");
+  buttonLoading(btn, true);
+  try {
+    await api("/invite", { method: "POST", body: { email } });
+    closeCrushModal();
+    toast("💌 Sent! They have no idea it's you.");
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    buttonLoading(btn, false);
+  }
 }
 async function submitReport() {
   const reason = document.querySelector('#report-reasons input:checked')?.value;

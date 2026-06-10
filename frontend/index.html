@@ -251,6 +251,29 @@
     </div>
   </div>
 
+  <!-- Secret crush modal -->
+  <div class="modal-backdrop hidden" id="crush-modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Send a secret crush" style="max-width:380px;">
+      <div class="modal-head">
+        <h3>💌 Secret Crush</h3>
+        <button class="icon-btn" id="crush-modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted" style="margin:0 0 18px;">They'll get a mysterious email — they won't know it's from you.</p>
+        <div class="field">
+          <label for="crush-email">Their email address</label>
+          <input type="email" id="crush-email" placeholder="crush@example.com" autocomplete="off" />
+        </div>
+      </div>
+      <div class="confirm-actions">
+        <button class="btn ghost" id="crush-cancel">Cancel</button>
+        <button class="btn" id="crush-send" style="background:linear-gradient(135deg,#FF3D6E,#ff6b9d);border:none;">Send 💌</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Install instructions modal -->
   <div class="modal-backdrop hidden" id="install-modal" aria-hidden="true">
     <div class="modal-card install-modal-card" role="dialog" aria-modal="true" aria-label="Install NextDate">
@@ -621,7 +644,10 @@
           <h2 class="discover-title">Discover</h2>
           <div class="discover-sub">Find your match</div>
         </div>
-        <button class="btn ghost sm" id="refresh-discover" title="Reshuffle the deck">↻</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn sm" id="secret-crush-btn" style="background:linear-gradient(135deg,#FF3D6E,#ff6b9d);border:none;color:#fff;font-weight:600;" title="Send a secret crush invite">💌 Crush</button>
+          <button class="btn ghost sm" id="refresh-discover" title="Reshuffle the deck">↻</button>
+        </div>
       </div>
       <div class="swipe-stage">
         <div class="swipe-stack" id="swipe-stack" aria-live="polite"></div>
