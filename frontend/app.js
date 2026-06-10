@@ -622,6 +622,7 @@ async function navigate(name, opts = {}) {
   // history at all.
   const isFirstNav = state.currentView === null;
   state.currentView = name;
+  document.getElementById("mobile-crush-btn")?.classList.toggle("hidden", name !== "discover");
   if (!opts.fromHistory) {
     const url = `#${name}`;
     if (isFirstNav || opts.replace) history.replaceState({ view: name }, "", url);
@@ -707,6 +708,7 @@ function closeDrawer() {
 document.getElementById("open-drawer")?.addEventListener("click", openDrawer);
 document.getElementById("sidebar-backdrop")?.addEventListener("click", closeDrawer);
 document.getElementById("mobile-notif-btn")?.addEventListener("click", () => navigate("notifications"));
+document.getElementById("mobile-crush-btn")?.addEventListener("click", () => openCrushModal());
 
 // Hide the bottom nav while the on-screen keyboard is open. We track the
 // keyboard via VisualViewport for older Android, and via focus on text

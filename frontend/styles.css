@@ -4443,6 +4443,7 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   100% { box-shadow: 0 0 0 0 rgba(255, 61, 110, 0), 0 10px 26px rgba(255,61,110,.35); transform: scale(1); }
 }
 
-#secret-crush-btn {
+#secret-crush-btn,
+#mobile-crush-btn {
   animation: crush-pulse 2s ease-in-out infinite;
 }
