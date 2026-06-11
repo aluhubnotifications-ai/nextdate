@@ -2306,12 +2306,17 @@ async function renderLikes(root) {
   const me = state.user?.id || DEMO_ME.id;
 
   let likers = [];
+  // Referral credit: every 3 friends who sign up through your invite
+  // link unblurs 1 liker tile. The backend counts users.invited_by rows.
+  let stats = { invited_signups: 0, reveals_earned: 0 };
 
   if (DEMO_MODE) {
     const matchedIds = new Set(
       DEMO_SESSIONS.flatMap((s) => [s.user_a, s.user_b]).filter((id) => id !== DEMO_ME.id)
     );
     likers = DEMO_USERS.filter((u) => !matchedIds.has(u.user_id));
+    const demoSignups = parseInt(localStorage.getItem("nd_demo_invite_signups") || "0", 10) || 0;
+    stats = { invited_signups: demoSignups, reveals_earned: Math.floor(demoSignups / 3) };
   } else {
     progressStart();
     try {
@@ -2324,6 +2329,7 @@ async function renderLikes(root) {
         (sessions || []).flatMap((s) => [s.user_a, s.user_b]).filter((id) => id !== me)
       );
       likers = (likeRows || []).map((r) => ({ user_id: r.liker })).filter((u) => !matchedIds.has(u.user_id));
+      stats = await api("/referrals/stats").catch(() => stats);
     } catch (err) {
       grid.innerHTML = `<div class="empty">Couldn't load likes.<br/><span class="muted">${escapeHtml(err.message)}</span></div>`;
       document.getElementById("likes-upsell")?.remove();
@@ -2344,25 +2350,60 @@ async function renderLikes(root) {
     return;
   }
 
-  const countLabel = document.getElementById("likes-count-label");
-  if (countLabel) {
-    countLabel.textContent = likers.length === 1 ? "1 person likes you!" : `${likers.length} people like you!`;
+  // Stable order so the same likers stay revealed across visits; the
+  // first `revealCount` tiles are the earned (unblurred) ones, so they
+  // sit at the top where the upsell gradient is transparent.
+  likers.sort((a, b) => (a.user_id < b.user_id ? -1 : 1));
+  const revealCount = Math.min(stats.reveals_earned || 0, likers.length);
+
+  if (!DEMO_MODE && revealCount > 0) {
+    // Blurred tiles don't need profile data, revealed ones do.
+    try {
+      const ids = likers.slice(0, revealCount).map((u) => u.user_id);
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, nickname, avatar_url, gender, zodiac_sign")
+        .in("id", ids);
+      const profMap = Object.fromEntries((profs || []).map((p) => [p.id, p]));
+      likers = likers.map((u) => ({ ...u, ...(profMap[u.user_id] || {}) }));
+    } catch { /* profiles unavailable — tiles unblur with placeholder data */ }
   }
 
-  for (const u of likers) {
+  const countLabel = document.getElementById("likes-count-label");
+  if (countLabel) {
+    const base = likers.length === 1 ? "1 person likes you!" : `${likers.length} people like you!`;
+    countLabel.textContent = revealCount ? `${base} ${revealCount} revealed 🎉` : base;
+  }
+
+  likers.forEach((u, i) => {
+    const revealed = i < revealCount;
     const tile = document.createElement("div");
-    tile.className = "liker-tile";
+    tile.className = "liker-tile" + (revealed ? " revealed" : "");
     tile.innerHTML = `
+      ${revealed ? '<div class="liker-revealed-badge">Revealed 🎉</div>' : ""}
       <div class="liker-avatar">${avatarInnerHtml(u.avatar_url || "🧑")}</div>
       <div class="liker-name">${escapeHtml(u.nickname || "Someone")}</div>
       <div class="liker-meta">${[u.gender, u.zodiac_sign].filter(Boolean).map(escapeHtml).join(" • ") || "—"}</div>
     `;
     grid.appendChild(tile);
+  });
+
+  const progress = document.getElementById("invite-progress");
+  if (progress && stats.invited_signups > 0) {
+    const n = stats.invited_signups;
+    const toNext = 3 - (n % 3);
+    progress.textContent = toNext === 3
+      ? `${n} friend${n === 1 ? "" : "s"} joined — invite 3 more to reveal another like`
+      : `${n} friend${n === 1 ? "" : "s"} joined — ${toNext} more to reveal a like`;
+    progress.classList.remove("hidden");
   }
 
   document.getElementById("go-discover-from-likes")?.addEventListener("click", () => navigate("discover"));
   document.getElementById("invite-to-reveal")?.addEventListener("click", () => {
-    navigator.clipboard?.writeText(location.origin + location.pathname).then(() => {
+    // inv:<my-id> so signups through this link are credited to me —
+    // that's what earns reveals (the backend resolves it in signup).
+    const link = `${location.origin}${location.pathname}?ref=${encodeURIComponent("inv:" + me)}`;
+    navigator.clipboard?.writeText(link).then(() => {
       toast("💌 Invite link copied! Share with 3 friends to reveal a like.");
     }).catch(() => toast("Share the app link with 3 friends to reveal a like!"));
   });

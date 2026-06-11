@@ -267,6 +267,34 @@ def config():
     }
 
 
+def _resolve_inviter(db: Client, ref: Optional[str], email: str) -> Optional[str]:
+    """Who gets referral credit for this signup. An inv:<uuid> share link
+    (copied from the Likes upsell) wins; otherwise fall back to the most
+    recent crush invitation sent to this email address."""
+    if ref and ref.strip().lower().startswith("inv:"):
+        try:
+            candidate = str(uuid.UUID(ref.strip()[4:]))
+            rows = db.table("users").select("id").eq("id", candidate).limit(1).execute()
+            if rows.data:
+                return candidate
+        except ValueError:
+            pass
+    try:
+        rows = (
+            db.table("invitations")
+            .select("inviter_id")
+            .eq("invited_email", email)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if rows.data and rows.data[0].get("inviter_id"):
+            return rows.data[0]["inviter_id"]
+    except Exception:
+        pass  # invitations table missing — no credit, signup proceeds
+    return None
+
+
 @app.post("/auth/signup", response_model=AuthResponse)
 def signup(body: SignupBody, db: Client = Depends(require_admin)):
     email = body.email.lower()
@@ -278,7 +306,18 @@ def signup(body: SignupBody, db: Client = Depends(require_admin)):
     user_row: dict = {"id": new_id, "email": email, "password_hash": hash_password(body.password)}
     if body.ref:
         user_row["ref_campaign"] = body.ref.strip()[:80]
-    db.table("users").insert(user_row).execute()
+    inviter_id = _resolve_inviter(db, body.ref, email)
+    if inviter_id:
+        user_row["invited_by"] = inviter_id
+        try:
+            db.table("users").insert(user_row).execute()
+        except Exception:
+            # invited_by column missing (migration not run) — degrade to
+            # an uncredited signup rather than failing registration.
+            user_row.pop("invited_by", None)
+            db.table("users").insert(user_row).execute()
+    else:
+        db.table("users").insert(user_row).execute()
 
     token = mint_jwt(new_id, email)
     return AuthResponse(user_id=new_id, email=email, token=token, expires_in=JWT_TTL_SECONDS)
@@ -623,6 +662,19 @@ def send_invite(body: InviteBody, uid: str = Depends(caller_id), db: Client = De
         print(f"[error] Crush email failed for {invited_email}: {exc}")
 
     return {"ok": True}
+
+
+@app.get("/referrals/stats")
+def referral_stats(uid: str = Depends(caller_id), db: Client = Depends(require_admin)):
+    """Referral progress for the Likes upsell: how many signups this user
+    has been credited with, and how many like-reveals that earns
+    (1 reveal per 3 referred signups)."""
+    try:
+        rows = db.table("users").select("id").eq("invited_by", uid).execute()
+        invited = len(rows.data or [])
+    except Exception:
+        invited = 0  # invited_by column missing — migration not run
+    return {"invited_signups": invited, "reveals_earned": invited // 3}
 
 
 # ---------- TF-IDF cosine matching ----------

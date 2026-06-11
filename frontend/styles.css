@@ -4479,6 +4479,29 @@ html[data-theme="light"] .onb-step + .onb-step::before { background: rgba(0,0,0,
   font-weight: 500;
   filter: blur(4px);
 }
+.liker-tile.revealed {
+  position: relative;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand-ring);
+}
+.liker-tile.revealed .liker-avatar,
+.liker-tile.revealed .liker-name,
+.liker-tile.revealed .liker-meta {
+  filter: none;
+}
+.liker-tile.revealed .liker-name { user-select: text; }
+.liker-revealed-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--brand-grad);
+  color: #fff;
+}
+.likes-invite-progress { font-size: 12px; }
 .likes-upsell {
   position: absolute;
   inset: 0;
