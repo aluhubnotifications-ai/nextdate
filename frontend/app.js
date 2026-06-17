@@ -2148,12 +2148,12 @@ function likeCurrent(card) {
   if (DEMO_MODE) {
     if (DEMO_MUTUAL_FANS.has(user.user_id)) handleMutualMatch(user);
   } else {
-    // like_user returns the chat_sessions id when both sides have liked
-    // (mutual match), otherwise null. Card flies away immediately for
-    // snappy UX; overlay only appears on a genuine mutual match.
+    // like_user returns {session_id, is_mutual}. A session is always
+    // created (liker can message immediately), but the match overlay
+    // only appears when it's genuinely mutual.
     supabase.rpc("like_user", { target: user.user_id }).then(({ data, error }) => {
       if (error) return toast(error.message);
-      if (data) showMatchOverlay(user, data);
+      if (data?.is_mutual) showMatchOverlay(user, data.session_id);
     });
   }
 
